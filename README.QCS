@@ -1,0 +1,46 @@
+HW(RTL9617B)
+	power 	12V/1.5A
+
+
+SDK 
+	unified-sdk-v1.0.8.tar.bz2
+
+
+Toolchain
+	/share/rlx/asdk-5.4.1-a53-EL-4.4-g2.23-a64nut-170801-r1
+
+
+Build
+	tar -jxf unified-sdk-v1.0.8.tar.bz2
+	cd sdk
+	make preconfig44_9617B_demo_Board-CTC
+	make menuconfig  	-> Exit -> Yes (3 times)
+	make all
+	
+	
+[SDK]/images/
+	firmware
+		Image.lzma			// run upk
+		img.tar				// run upt
+		vm.img		 		// run vpv
+	rootfs					// run upr
+	G3_ubi_device.ubi			// run updev 	//(Flash Layout)
+
+
+u-boot env
+	rootfs_img_name=rootfs
+	upk=setenv current_vol ubi_k0 && run check_vol && tftpboot ${ftfp_base} Image.lzma && ubi write ${ftfp_base} ubi_k0 ${filesize}
+	upr=setenv current_vol ubi_r0 && run check_vol && tftpboot ${ftfp_base} ${rootfs_img_name} && ubi write ${ftfp_base} ubi_r0 ${fil}
+	upt=tftp ${ftfp_base} img.tar && upimgtar ${fileaddr} ${filesize}
+	upv=tftp ${ftfp_base} vm.img && upvmimg ${fileaddr}
+
+
+upgrade images in u-boot
+	setenv ipaddr 192.168.1.1
+	setenv serverip 192.168.1.169
+	run updev			    // only if for Flash Layout
+	run upk				    // for firmware images/Image.lzma
+	run upr				    // for rootfs images/rootfs
+	
+
+
