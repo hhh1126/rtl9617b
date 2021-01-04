@@ -1,0 +1,73 @@
+if RTK_L34_FLEETCONNTRACK_ENABLE
+
+#
+# Fleet Conntrack Driver configuration
+#
+
+
+config RTK_L34_FC_KERNEL_MODULE
+	tristate "FC driver kernel module"
+	default y
+	help
+	   To compile FC driver as build-in or module 
+menu "FC driver smp dispatch"
+config RTK_L34_FC_IPI_NIC_RX
+	bool "smp ipi dispatch for nic rx process"
+	default y if SMP
+config RTK_L34_FC_IPI_NIC_TX
+        bool "smp ipi dispatch for nic tx process"
+        default y if SMP
+config RTK_L34_FC_IPI_WIFI_RX
+        bool "smp ipi dispatch for wifi rx process"
+        default y if SMP
+config RTK_L34_FC_IPI_WIFI_TX
+        bool "smp ipi dispatch for wifi tx process"
+        default y if SMP
+endmenu
+
+config RTK_FC_PER_SW_FLOW_MIB
+	bool "FC per SW flow mib (support in SW_onlt mode)"
+	default n
+
+config RTK_FC_WLAN_HWNAT_ACCELERATION
+	bool "FC WLAN HWNAT acceleration"
+	default y
+
+config RTK_L34_NETFILTER_HOOK
+	bool "FC netfilter hook registration"
+	default y
+	help
+	   it helps FC to cache forwarding info
+
+if FC_CAG3_SERIES
+config RG_G3_L2FE_POL_OFFLOAD
+        bool "loop-back mode for host-policing & meter"
+        default n
+endif
+
+if FC_RTL9607C_SERIES
+config FC_WIFI_TRAP_HASH_SUPPORT
+	bool "wifi trap hash support"
+	default n
+endif
+
+config RTK_CPU_PORT_FLOW_CONTROL
+	bool "Enable CPU port flow control"
+	depends on RTK_L34_XPON_PLATFORM
+	default n
+
+if FC_CA8277B_SERIES
+config FC_SPECIAL_FAST_FORWARD
+	bool "special fast-forward for VXLAN and NPTv6"
+	default n
+endif
+
+if RTK_L34_XPON_PLATFORM
+config FC_SPECIAL_FAST_FORWARD
+	bool "special fast-forward for VXLAN and NPTv6"
+	default n
+endif
+
+source drivers/net/ethernet/realtek/rtl86900/FleetConntrackDriver/Kconfig.core
+
+endif #endif RTK_L34_FLEETCONNTRACK_ENABLE
