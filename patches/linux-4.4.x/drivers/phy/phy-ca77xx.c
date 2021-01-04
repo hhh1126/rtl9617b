@@ -507,9 +507,14 @@ static int ca77xx_phy_power_config(struct ca77xx_phy *phy, bool enable)
 
 	switch (phy->id) {
 	case PHY_S0_PCIE0:
+#if 0
 		enable_set_mask = S0_POW_PCIE2_0 | S0_POW_PCIE2_1;
 		enable_clr_mask = S0_PCIE2_ISOLATE_0 | S0_RXAUI_MODE |
 				  S0_PCIE2_ISOLATE_1;
+#else
+		enable_set_mask = S0_POW_PCIE2_0;
+	        enable_clr_mask = S0_PCIE2_ISOLATE_0 | S0_RXAUI_MODE;
+#endif
 		break;
 	case PHY_S0_PCIE1:
 		enable_set_mask = S0_POW_PCIE2_1;

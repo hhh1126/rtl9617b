@@ -537,10 +537,17 @@ static int ca77xx_pcie_host_reset(struct ca77xx_pcie *ca77xx_pcie,
 	else
 		ca77xx_pcie_serdes_phy_power_on(ca77xx_pcie);
 
+#if 0
 	/* one for all lanes */
 	phy_power_on(ca77xx_pcie->phy[0]);
 	usleep_range(1000, 2000);
-
+#else
+	for (i = 0; i < ca77xx_pcie->lanes; i++) {
+		phy_power_on(ca77xx_pcie->phy[i]);
+		usleep_range(1000, 2000);
+	}
+#endif
+ 
 	/*
 	 * Turn off lane 1's PHY power if single lane is used.
 	 *
@@ -1140,6 +1147,11 @@ static int __init ca77xx_pcie_probe(struct platform_device *pdev)
 	if (!IS_ERR_OR_NULL(ca77xx_pcie->device_power)) {
 		reset_control_reset(ca77xx_pcie->device_power);
 	}
+ 
+	ca77xx_pcie->device_power = of_reset_control_get(np, "device_power");
+	if (!IS_ERR_OR_NULL(ca77xx_pcie->device_power)) {
+		reset_control_reset(ca77xx_pcie->device_power);
+	}
 
 	for (i = 0; i < MAX_LANE_NUM; i++) {
 		sprintf(name, "pcie-phy%d", i);
@@ -1203,9 +1215,15 @@ static int __exit ca77xx_pcie_remove(struct platform_device *pdev)
 	reset_control_assert(ca77xx_pcie->device_reset);
 	usleep_range(100, 110);
 
+#if 0
 	/* one for all lanes */
 	phy_power_off(ca77xx_pcie->phy[0]);
-
+#else
+	for (i = 0; i < ca77xx_pcie->lanes; i++) {
+		phy_power_off(ca77xx_pcie->phy[i]);
+		usleep_range(1000, 2000);
+	}
+#endif
 	clk_disable_unprepare(ca77xx_pcie->bus_clk);
 
 	return 0;
