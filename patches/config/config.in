@@ -1773,6 +1773,8 @@ bool 'RTK Select Only One Default Gateway (include VPN) By User'	CONFIG_USER_SEL
 bool 'RTK Generate Different WAN MAC'		CONFIG_USER_GEN_WAN_MAC
 bool 'RTK Nessus Scan fixed'                    CONFIG_USER_RTK_NESSUS_SCAN_FIXED
 
+bool 'Quantenna Wifi Ax'			CONFIG_QTNA_WIFI_AX
+
 endmenu
 #############################################################################
 

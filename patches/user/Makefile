@@ -679,6 +679,7 @@ dir_$(CONFIG_USER_DOT1AG_UTILS)             += dot1ag-utils libpcap
 dir_$(CONFIG_TR142_MODULE)                  += rtk_tr142
 dir_$(CONFIG_USER_RTK_VOIP)                 += rtk_voip/rtk_libomci_voip
 dir_$(CONFIG_USER_RTK_FASTPASSNF_MODULE)    += rtk_fastPassNF
+dir_$(CONFIG_QTNA_WIFI_AX)                  += qtna_wifi_ax
 
 #add by alex_huang netlogger
 #dir_$(CONFIG_USER_NETLOGGER_SUPPORT)+= netlogger

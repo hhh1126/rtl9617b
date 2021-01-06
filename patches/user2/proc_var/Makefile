@@ -562,8 +562,8 @@ endif
 endif
 
 ifeq ($(USE_BOARD_LED_INIT),1)
-	$(ROMFSINST) board_init.sh /etc/scripts/board_init.sh
-	$(ROMFSINST) -a "/bin/sh /etc/scripts/board_init.sh" $(RC_LEVEL_FINISH)
+#	$(ROMFSINST) board_init.sh /etc/scripts/board_init.sh
+#	$(ROMFSINST) -a "/bin/sh /etc/scripts/board_init.sh" $(RC_LEVEL_FINISH)
 endif
 ifeq ($(CONFIG_RPS),y)
 ifneq (, $(wildcard $(ROOTDIR)/user2/proc_var/rps.sh)); then
