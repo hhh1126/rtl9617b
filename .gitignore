@@ -1,0 +1,6 @@
+session.vim
+viminfo
+*.ko
+*.o
+*.so
+*.a
