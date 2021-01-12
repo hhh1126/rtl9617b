@@ -1,5 +1,4 @@
 
-CC = gcc
 CFLAGS += -I. -I./common -fPIC -O -g -Wall -Werror -Wno-unused-variable -Wno-unused-parameter -fstrict-aliasing
 CFLAGS += -D_GNU_SOURCE
 
@@ -37,7 +36,7 @@ LIB_OBJS = \
 	qcsapi_rpc_common/common/rpc_raw.o \
 	qcsapi_grabber.o
 
-TARGETS = c_rpc_qcsapi_sample \
+TARGETS = \
 	qcsapi_sockrpc \
 	qcsapi_sockrpc_static \
 	qcsapi_pcie \
@@ -91,3 +90,12 @@ build/%.o: %.c
 clean:
 	rm -rf build $(LIB_LDNAME)* $(TARGETS) $(LIB_OBJS)
 
+install:
+	-mkdir -p ${DEST}/usr/bin
+	-mkdir -p ${DEST}/usr/lib
+	cp qcsapi_pcie qcsapi_sockrpc qcsapi_sockraw ${DEST}/usr/bin
+	cp ${LIB_REALNAME} ${DEST}/usr/lib && \
+	    pushd ${DEST}/usr/lib && \
+	    ln -sf ${LIB_REALNAME} ${LIB_SONAME} && \
+	    ln -sf ${LIB_SONAME} ${LIB_LDNAME} && \
+	    popd
