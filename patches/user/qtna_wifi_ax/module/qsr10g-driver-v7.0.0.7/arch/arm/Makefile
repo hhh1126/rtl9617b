@@ -19,10 +19,15 @@ qsr10g_pcie.o: $(qsr10g-pcie-objs)
 	ld -r $^ -o $@
 
 all:
-	make -C $(KERNELDIR) $(CROSS) M=$(PWD) modules
-
+	$(MAKE) -C $(KDIR) $(EXTRA_CFLAGS) modules \
+	    V=1 \
+	    M=$(PWD) \
+	    ARCH=arm64 \
+	    CROSS_COMPILE=$(CROSS_COMPILE)
+ 
 
 clean:
 	rm -rf $(COMMON_DIR)/.*.cmd $(COMMON_DIR)/.tmp_versions
 	rm -rf Module.markers  Module.symvers modules.order *~ $(qsr10g-pcie-objs) *.o *.ko *.mod.o *.mod.c
+	rm -rf .tmp_versions .*.cmd
 
