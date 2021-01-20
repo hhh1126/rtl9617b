@@ -29,6 +29,10 @@
 #define IOREMAP      ioremap
 #endif
 
+#ifndef IO_ADDRESS
+#define IO_ADDRESS(x) ((void *)(x))
+#endif
+
 /* IO functions */
 #ifndef readb
 #define readb(addr) (*(volatile unsigned char *) (addr))
