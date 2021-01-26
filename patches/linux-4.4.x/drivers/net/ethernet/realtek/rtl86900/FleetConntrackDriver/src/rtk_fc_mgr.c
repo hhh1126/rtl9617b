@@ -232,6 +232,11 @@ rtk_fc_wlan_initmap_t wlanInitMap[] =
 	{RTK_FC_WLAN1_VAP5_INTF, "wlan1-vap5",	{RTK_FC_MAC_PORT_WLAN_CPU1, RTK_FC_MAC_EXT_NONE}},
 	{RTK_FC_WLAN1_VAP6_INTF, "wlan1-vap6",	{RTK_FC_MAC_PORT_WLAN_CPU1, RTK_FC_MAC_EXT_NONE}},
 #endif
+
+#if defined(CONFIG_FC_QTNA_WIFI_AX)
+	{RTK_FC_WLANx_PCIE_INTF, "host0",	{RTK_FC_MAC_PORT_WLAN_CPU1, RTK_FC_MAC_EXT_NONE}},
+#endif
+ 
 #endif //CONFIG_FC_RTL8198F_SERIES
 
 #endif

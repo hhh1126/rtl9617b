@@ -51,6 +51,7 @@ typedef enum rtk_fc_wlanDev_e
 	RTK_FC_WLANx_ATM_VC7_INTF = 53,
 
 	RTK_FC_WLANx_USB_INTF = 54,
+	RTK_FC_WLANx_PCIE_INTF = 55,
 
 	RTK_FC_WLANX_END_INTF 	= 61,
 	RTK_FC_WLANX_MULTI_INTF 	= 62,

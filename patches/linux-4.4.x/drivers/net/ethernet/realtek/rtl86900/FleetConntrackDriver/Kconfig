@@ -60,6 +60,10 @@ if FC_CA8277B_SERIES
 config FC_SPECIAL_FAST_FORWARD
 	bool "special fast-forward for VXLAN and NPTv6"
 	default n
+
+config FC_QTNA_WIFI_AX
+	bool "data path of Quantenna wifi ax"
+	default n
 endif
 
 if RTK_L34_XPON_PLATFORM

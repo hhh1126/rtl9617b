@@ -668,6 +668,12 @@ int rtk_fc_dev_is_wlan_dev(struct net_device *dev, bool *wlandev)
 		*wlandev = TRUE;
 #endif
 #endif
+
+#if defined(CONFIG_FC_QTNA_WIFI_AX)
+	else if(!strncmp(dev->name, "host0", 5))
+		*wlandev = TRUE;
+#endif
+ 
 	else
 		*wlandev = FALSE;
 
