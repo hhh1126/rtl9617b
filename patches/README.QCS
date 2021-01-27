@@ -1,0 +1,107 @@
+HW(RTL9617B)
+	power 	12V/1.5A
+
+Realtek SDK 
+	unified-sdk-v1.0.14.tar.bz2
+
+Toolchain
+	/share/rlx/asdk-5.4.1-a53-EL-4.4-g2.23-a64nut-170801-r1
+
+Source
+	# extract Realtek SDK
+	tar -jxf unified-sdk-v1.0.14.tar.bz2
+	# extract the sources from patches/ to Realtek sdk
+	cp -rf patches/* [path_to_sdk]/
+
+Build
+	# config
+	cd sdk
+	make preconfig44_9617B_demo_Board-CTC-QTNA
+	make menuconfig  	-> Exit -> Yes (3 times)
+	# build
+	make all
+	
+	
+[SDK]/images/
+	firmware
+		Image.lzma			// run upk
+		img.tar				// run upt
+		vm.img		 		// run vpv
+	rootfs					// run upr
+	G3_ubi_device.ubi			// run updev 	//(Flash Layout)
+
+
+RTL9617B u-boot ENV
+	rootfs_img_name=rootfs
+	upk=setenv current_vol ubi_k0 && run check_vol && tftpboot ${ftfp_base} Image.lzma && ubi write ${ftfp_base} ubi_k0 ${filesize}
+	upr=setenv current_vol ubi_r0 && run check_vol && tftpboot ${ftfp_base} ${rootfs_img_name} && ubi write ${ftfp_base} ubi_r0 ${fil}
+	upt=tftp ${ftfp_base} img.tar && upimgtar ${fileaddr} ${filesize}
+	upv=tftp ${ftfp_base} vm.img && upvmimg ${fileaddr}
+
+
+Upgrade images in u-boot
+	setenv ipaddr 192.168.1.1
+	setenv serverip 192.168.1.169
+	run updev			    // only if for Flash Layout
+	run upt				    // for firmware images/img.tar
+	
+
+Bring Up QSR10G (Just for your reference, this step will be done by rcS script)
+	1) upload QSR10G firmware to RLT9617B if the img is absent
+	   BBIC5 (AX1)	 /lib/firmware/pearl-linux.lzma.img --> /lib/firmware/pearl-linux-c-v50.0.56.8p562.lzma.img
+	   BBIC6 (AX2)	 /lib/firmware/jade-linux.lzma.img  --> /tmp/jade-linux-v7.0.0.7p600.lzma.img
+  
+	2) load QSR10G driver
+	   insmod /lib/modules/qsr10g-pcie.ko
+
+	3) bridge "host0" interface with other LAN port
+	   brctl addif br0 host0
+	   ifconfig host0 up
+
+	4) example of how to config QSR10GU-AX via QCSAPI
+	   qcsapi_sockrpc --host [EP_IP] [cmd] [interface]
+	   qcsapi_sockrpc --host [EP_IP] get_SSID wifi0_0
+	
+
+Config FC (Fleet Contrak) (Just for your reference, this step will be done by rcS script)
+	// SMP 
+	echo wlan 0 mode 1 cpu 3 > /proc/fc/ctrl/smp_dispatch_wifi_tx	    //將wifi tx配置到cpu3
+	echo wlan 0 mode 1 cpu 2 > /proc/fc/ctrl/smp_dispatch_wifi_rx	    //將wifi rx配置到cpu2
+
+	// 開啟nic rx skb refill使用interrupt方式一次回補
+	echo 1 > proc/driver/cortina/ni/qm_eq_refill_inttrupt
+
+	// smp_affinity
+	echo 2 > /proc/irq/23/smp_affinity
+	echo 2 > /proc/irq/24/smp_affinity
+	echo 1 > /proc/irq/13/smp_affinity
+	
+	// enable statistics
+	echo 1 > /proc/fc/sw_dump/fwd_statistic
+	echo 1 > /proc/fc/sw_dump/smp_statistic
+
+
+Check Status
+
+	cat /proc/fc/sw_dump/wlan_devmap
+		DEVID    DEV_NAME      MAC_PORT EXTPORT  PROPERTY BAND     DEV_PTR
+		55       host0         19(0x13) 0        1-to-1   0        ffffffc038341000
+
+	// interrupts
+	cat /proc/interrupts
+
+	// SMP CPU配置
+		Wifi Tx(fast forward):
+			CPU 0處理: GMAC RX (HW forward to cpu port 0x13)
+			CPU 1處理: NIC SKB refill
+			CPU 3處理: WIFI TX
+		Wifi Rx(hw lookup):
+			CPU 1處理: WIFI RX
+			CPU 2處理: GMAC TX (hw lookup)
+	// statistics
+	cat      /proc/fc/hw_dump/dropcount
+	cat      /proc/fc/sw_dump/fwd_statistic
+	cat      /proc/fc/sw_dump/smp_statistic
+
+	// 分片包硬件無法處理,會變成無法加速
+
