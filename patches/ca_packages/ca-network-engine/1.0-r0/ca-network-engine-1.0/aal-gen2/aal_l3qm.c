@@ -83,6 +83,7 @@ ca_uint8_t	l3qm_eq0_eq1_all_dram = 0;				/* Force EQ0 and EQ1 share DRAM buffers
 
 uint32_t		sram_dts_conf_size = 0;					/* HW support 256KB - dtsi define 240KB are avaliable for NE */
 uint32_t		sram_cur_used_size = 0;					/* init as BL2 reserved size */
+ca_uint32_t 	epp64_paddr_start[8][8] = {0};
 #else
 ca_uint8_t	l3qm_eq0_sram_eq1_dram = 0;			/* EQ0 SRAM and EQ1 DRAM Mode*/
 #endif
@@ -576,6 +577,9 @@ ca_uint32_t aal_l3qm_special_fastFwd_get_rx_read_write_ptr(ca_uint16_t cpu_port,
 
 ca_uint32_t aal_l3qm_get_rx_start_addr(ca_uint16_t cpu_port, ca_uint8_t voq)
 {
+#if defined(CONFIG_LUNA_G3_SERIES)
+	return epp64_paddr_start[cpu_port][voq];
+#else
 	QM_QM_CPUEPP_POINTER_CPUEPP64_FIFO_PADDR_START_t paddr_start;
 
 	paddr_start.wrd = CA_NE_REG_READ(QM_QM_CPUEPP_POINTER_CPUEPP64_FIFO_PADDR_START + (cpu_port * l3qm_cpu_voq_per_port + voq) *
@@ -586,6 +590,7 @@ ca_uint32_t aal_l3qm_get_rx_start_addr(ca_uint16_t cpu_port, ca_uint8_t voq)
 	}
 
 	return paddr_start.bf.phy_addr;
+#endif
 }
 
 ca_uint32_t aal_l3qm_get_rx_status0(void)
@@ -948,6 +953,9 @@ void aal_l3qm_init_cpu_epp(void)
 				(j * l3qm_cpu_voq_per_port * QM_QM_CPUEPP_POINTER_CPUEPP64_FIFO_PADDR_START_STRIDE);
                         cpu_epp64_fifo_paddr_start.bf.phy_addr = l3qm_epp_profile_cpu_rx_fifo_phy_addr + (i * size) + (j * l3qm_cpu_voq_per_port * size);
                         CA_NE_REG_WRITE(cpu_epp64_fifo_paddr_start.wrd, reg_off);
+#if defined(CONFIG_LUNA_G3_SERIES)
+				epp64_paddr_start[j][i] = cpu_epp64_fifo_paddr_start.bf.phy_addr;
+#endif
 
                         if (ca_aal_debug & AAL_DBG_L3QM) {
 				printk("%s: CPU RX FIFO register offset(%d, %d)=0x%x\n", __func__, j, i, reg_off);

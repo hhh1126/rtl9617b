@@ -1779,6 +1779,7 @@ static int ca_ni_rx_napi(int cpu_port, u8 voq, struct napi_struct *napi, int bud
 			ca_ni_decide_rx_lspib_by_fakeVlan(skb, &phy_src_port, &hdr_a); //decide source port by fake vlan
 #endif		
 		skb->dev = ca_ni_decide_rx_device(cep, phy_src_port);
+		skb->ip_summed = CHECKSUM_NONE;
 
 #else
 
@@ -1791,8 +1792,6 @@ static int ca_ni_rx_napi(int cpu_port, u8 voq, struct napi_struct *napi, int bud
 			}
 		}
 		skb->dev = ca_ni_decide_rx_device(cep, phy_src_port);
-#endif
-#endif
 
 		skb->ip_summed = CHECKSUM_NONE;
 
@@ -1807,6 +1806,8 @@ static int ca_ni_rx_napi(int cpu_port, u8 voq, struct napi_struct *napi, int bud
 				}
 			}
 		}
+#endif
+#endif
 
 #ifdef CONFIG_NE_L2FP
 		if (ca_l2fp_receive_pkt(cpu_port, voq, skb) == CA_E_OK) {
@@ -2285,6 +2286,78 @@ int ca_ni_mgmt_recv(int instance, struct napi_struct *napi, int budget)
 	}
 	return received_pkts;
 }
+ 
+#if defined(CONFIG_LUNA_G3_SERIES)
+
+static u8 ca_ni_rx_get_voqs_state(int cpu_port)
+{
+	u32 rx_status;
+	u8 voq_state;
+
+	/* CPU port 0-3 use QM_QM_CPU_EPP_STATUS0 and 4-7 use QM_QM_CPU_EPP_STATUS1 */
+	if (cpu_port < 4) {
+		rx_status = aal_l3qm_get_rx_status0();
+		voq_state = (rx_status >> (cpu_port<<3)) & 0xFF;
+	}
+	else {
+		rx_status = aal_l3qm_get_rx_status1();
+		voq_state = (rx_status >> ((cpu_port-4)<<3)) & 0xFF;
+	}
+	
+
+	if (ca_ni_debug & NI_DBG_DUMP_RX) {
+		printk("%s: cpu_port=%d, voq traffic state=0x%x\n", __func__, cpu_port, voq_state);
+	}
+	return voq_state;
+}
+
+int ca_ni_rx_poll(int cpu_port, struct napi_struct *napi, int budget)
+{
+	int i;
+	int received_pkts = 0;
+	int total_received_pkts = 0;
+	u8 voq;
+	int rest_budget = budget;
+
+	/* get starup config constants */
+	ca_ni_rx_get_startup_config();
+	
+	voq = ca_ni_rx_get_voqs_state(cpu_port);
+
+	if (aal_l3qm_eq_get_cpu_rule() == 0) {
+		for (i = 7; i >= 0; i--) {
+			if (voq & (1<<i)) {
+				received_pkts = ca_ni_rx_napi(cpu_port, i, napi, rest_budget);
+				rest_budget -= received_pkts;
+				total_received_pkts += received_pkts;
+			}
+		}
+	}
+	else {
+		for (i = 7; i >= 0; i--) {
+			if (voq & (1<<i)) {
+				received_pkts = ca_ni_rx_napi_rule1(cpu_port, voq, napi, rest_budget);
+				rest_budget -= received_pkts;
+				total_received_pkts += received_pkts;
+			}
+		}
+	}
+
+	if (total_received_pkts < budget) {
+
+		napi_complete(napi);
+
+		/* do not diable interrupt if we got bad packet */
+		//if (ca_ni_rx_get_bad_packet == 0)
+		aal_ni_enable_rx_interrupt_by_cpu_port(cpu_port, 1);
+
+		return 0;
+	}
+
+	return total_received_pkts;
+}
+
+#else
 
 static int ca_ni_rx_get_voq(int cpu_port, u8 index, u8 *voq)
 {
@@ -2356,6 +2429,7 @@ int ca_ni_rx_poll(int cpu_port, struct napi_struct *napi, int budget)
 
 	return total_received_pkts;
 }
+#endif
 
 #if defined(CONFIG_LUNA_G3_SERIES) && defined(CONFIG_FC_SPECIAL_FAST_FORWARD)
 ca_uint32_t ni_ff_refill_cnt[8][8];		// per cpu
