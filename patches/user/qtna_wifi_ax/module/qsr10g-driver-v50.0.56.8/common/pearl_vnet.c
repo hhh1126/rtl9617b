@@ -622,6 +622,10 @@ static inline void vmac_rx_forward(struct vmac_priv *vmp, uint32_t bdata,
 	}
 }
 #endif
+ 
+#if defined(CONFIG_FC_QTNA_WIFI_AX)
+extern int rtk_fc_fastfwd_netif_rx(struct sk_buff *skb);
+#endif
 
 static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 		struct rx_buf_info_t *rxinfo, int len)
@@ -663,7 +667,13 @@ static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 
 	dump_rx_pkt(vmp, (char *)skb->data, (int)skb->len);
 	skb->protocol = eth_type_trans(skb, ndev);
-	netif_receive_skb(skb);
+
+#if defined(CONFIG_FC_QTNA_WIFI_AX)
+        rtk_fc_fastfwd_netif_rx(skb);
+#else
+ 	netif_receive_skb(skb);
+#endif
+
 #endif
 	return true;
 }
