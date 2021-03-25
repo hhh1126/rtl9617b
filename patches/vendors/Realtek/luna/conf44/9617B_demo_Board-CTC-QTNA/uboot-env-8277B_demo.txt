@@ -1,0 +1,105 @@
+/* FLASh_LAYOUT for u-boot command */
+pfl_boot_sz=0x180000
+pfl_env1_r=0x200000
+pfl_env2_r=0x240000
+pfl_env_size=0x40000
+pfl_cfg_size=0xa00000
+pfl_fdt1_sz=0x40000
+pfl_kernel1_sz=0x600000
+pfl_rootfs1_sz=0x4600000
+pfl_fdt2_sz=0x40000
+pfl_kernel2_sz=0x600000
+pfl_rootfs2_sz=0x4600000
+pf1_apps_sz=0x3000000
+/* MTD PARTITION */
+mtdids=nand0=ca_spinand_flash
+/* TFTP, NET */
+auto_scan_active_port=1
+unzip_src=0x5000000
+tftp_base=0x5000000
+active_port=0
+baudrate=115200
+bootdelay=1
+ethact=Presidio
+ethaddr=00:50:c2:01:02:03
+fdt_addr_r=0x01000000
+fdt_high=0x00000000
+gatewayip=192.168.1.7
+initrd_addr_r=0x02000000
+ipaddr=192.168.1.2
+kernel_addr_r=00080000
+netmask=255.255.255.0
+serverip=192.168.1.7
+stderr=serial
+stdin=serial
+stdout=serial
+/* UBI FS */
+setmoreargs=setenv more_args ubi.mtd=${rootfs_mtd} root=ubi0:rootfs rootfstype=ubifs
+setbootargs=setenv bootargs ${basicargs} ${more_args} ${ramargs} ${mtdparts}
+basicargs=earlycon=serial,0xf4329188 console=ttyS0,115200
+b=booti ${kernel_addr_r} - ${fdt_addr_r}
+/* LUNA_FIRMWARE_UPGRADE_SUPPORT */
+boot_by_commit=if itest.s ${sw_commit} == 0;then run set_act0;run b1;else run set_act1;run b2;fi
+boot_by_tryactive=if itest.s ${sw_tryactive} == 0;then setenv sw_tryactive 2;setenv sw_active 0;saveenv;run en_wdt;run b1;else setenv sw_tryactive 2;setenv sw_active 1;saveenv;run en_wdt;run b2;fi
+bootcmd=if itest.s ${sw_tryactive} == 2; then run boot_by_commit;else run boot_by_tryactive;fi
+set_act0=if itest.s ${sw_active} != 0;then setenv sw_active 0;saveenv;fi
+set_act1=if itest.s ${sw_active} != 1;then setenv sw_active 1;saveenv;fi
+sw_active=0
+sw_commit=0
+sw_tryactive=2
+sw_version0=V4.0.0
+sw_version1=V4.0.0
+en_wdt=watchdog 60
+erase_cfgfs=setenv current_vol ubi_Config && run check_vol && ubi clean ubi_Config
+erase_apps=nand erase ${pf1_apps} ${pf1_apps_sz}
+upenv=tftpboot ${tftp_base} uboot-env.bin && nand erase.part env && nand write ${tftp_base} env ${filesize} && nand erase.part env2 && nand write ${tftp_base} env2 ${filesize}
+upv=tftp ${tftp_base} vm.img && upvmimg ${fileaddr}
+upt=tftp ${tftp_base} img.tar && upimgtar ${fileaddr} ${filesize}
+upb=tftp ${tftp_base} ${uboot_img_name} && nand erase 0x0 ${pfl_boot_sz} && nand write ${tftp_base} 0x0 ${filesize}
+rootfs_img_name=rootfs
+uboot_img_name=venus_spi_nand_loader.img
+upk=setenv current_vol ubi_k0 && run check_vol && tftpboot ${tftp_base} Image.lzma && ubi write ${tftp_base} ubi_k0 ${filesize}
+upr=setenv current_vol ubi_r0 && run check_vol && tftpboot ${tftp_base} ${rootfs_img_name} && ubi write ${tftp_base} ubi_r0 ${filesize}
+upd=setenv current_vol ubi_DTB0 && run check_vol && tftpboot ${tftp_base} dtb.img && ubi write ${tftp_base} ubi_DTB0 ${pfl_fdt1_sz}
+upk1=setenv current_vol ubi_k1 && run check_vol && tftpboot ${tftp_base} Image.lzma && ubi write ${tftp_base} ubi_k1 ${filesize}
+upr1=setenv current_vol ubi_r1 && run check_vol && tftpboot ${tftp_base} ${rootfs_img_name} && ubi write ${tftp_base} ubi_r1 ${filesize}
+upd1=setenv current_vol ubi_DTB1 && run check_vol && tftpboot ${tftp_base} dtb.img && ubi write ${tftp_base} ubi_DTB1 ${pfl_fdt2_sz}
+
+/* check volume */
+current_vol=""
+ubi_device_name=ubi_device
+chk_volume=ubi check ${current_vol}
+ubi_part=ubi part ${ubi_device_name}
+check_vol=if run chk_volume; then ; else if run ubi_part; then if run chk_volume; then ; else echo ${current_vol} no exist; false; fi; fi; fi
+
+/* create ubi volume */
+create_ubi_config=ubi create ubi_Config ${pfl_cfg_size} dynamic
+create_ubi_kr1=ubi create ubi_DTB0 ${pfl_fdt1_sz} dynamic && ubi create ubi_k0  ${pfl_kernel1_sz} dynamic && ubi create ubi_r0 ${pfl_rootfs1_sz} dynamic
+create_ubi_kr2=ubi create ubi_DTB1 ${pfl_fdt2_sz} dynamic && ubi create ubi_k1  ${pfl_kernel2_sz} dynamic && ubi create ubi_r1 ${pfl_rootfs2_sz} dynamic
+create_ubi_device=run create_ubi_config && run create_ubi_kr1 && run create_ubi_kr2
+
+/* boot process */
+ubi_mtd_num=4
+process1=ubi part ${ubi_device_name}; ubi read ${unzip_src} ubi_k0 ${pfl_kernel1_sz};echo lzmadec-start; lzmadec ${unzip_src} ${kernel_addr_r}; ubi read ${fdt_addr_r} ubi_DTB0 ${pfl_fdt1_sz}
+b1=setenv ubi_mtd ${ubi_mtd_num}; setenv root_mtd 31:8; run process1 setmoreargs setbootargs b
+process2=ubi part ${ubi_device_name}; ubi read ${unzip_src} ubi_k1 ${pfl_kernel2_sz};echo lzmadec-start; lzmadec ${unzip_src} ${kernel_addr_r}; ubi read ${fdt_addr_r} ubi_DTB1 ${pfl_fdt2_sz}
+b2=setenv ubi_mtd ${ubi_mtd_num}; setenv root_mtd 31:11; run process2 setmoreargs setbootargs b
+setmoreargs=setenv more_args ubi.mtd=${ubi_mtd} root=${root_mtd} rootfstype=squashfs
+
+/*app and framework*/
+erase_apps=setenv current_vol ubi_apps && run check_vol && ubi clean ubi_apps
+erase_framework1=setenv current_vol ubi_framework1 && run check_vol && ubi clean ubi_framework1
+erase_framework2=setenv current_vol ubi_framework2 && run check_vol && ubi clean ubi_framework2
+upframework=setenv current_vol ubi_framework1 && run check_vol && tftpboot ${tftp_base} framework.img && ubi write ${tftp_base} ubi_framework1 ${filesize} && ubi write ${tftp_base} ubi_framework2 ${filesize}
+
+
+/* MTD partition string */
+mtdparts=mtdparts=ca_spinand_flash:1536K(boot),256K@0x200000(env),256K@0x240000(env2),256K@0x280000(static_conf),251648K@0x2c0000(ubi_device)
+
+/* update ubi device */
+ubi_device_img_name=G3_ubi_device.ubi
+updev=setenv current_vol ubi_Config && if run check_vol; then run _updev_bk;  else run _updev; fi
+
+_updev=tftpboot ${tftp_base} ${ubi_device_img_name} && nand erase.part ubi_device && nand write ${tftp_base} ubi_device ${filesize}
+_updev_bk=ubi read ${tftp_base} ubi_Config && setenv tftp_tmp ${tftp_base} &&  setenv tftp_base ${tftp_base_bk} && run _updev && setenv tftp_base ${tftp_tmp} && setenv tftp_tmp  && run ubi_part && ubi write ${tftp_base} ubi_Config ${ubi_len_read}
+

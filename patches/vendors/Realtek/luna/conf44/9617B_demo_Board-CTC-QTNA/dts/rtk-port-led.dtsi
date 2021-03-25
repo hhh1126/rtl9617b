@@ -1,0 +1,79 @@
+
+/*
+ * rtk-port-led.dtsi - Device Tree Include file for CA77xx SoC with
+ * LED contoller.
+ *
+ */
+
+/ {
+	led_ctrl: led-controller@f4320144 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "realtek,rtk_port-leds";
+		reg = <0x0 0xf4320144 0x0 0x44>,
+		      <0x0 0xf432945c 0x0 0x4>;
+		reg-names = "led_ctrl", "spare";
+
+		hw-blink-rate1 = <32>;
+		hw-blink-rate2 = <64>;
+
+		num-ports = <4>;
+
+		led0: led@0 {
+			reg = <0>;
+			label = "LED_Port3";
+			port = <3>;
+			mode = <1>; 	/* 0: HW blink AND mode
+					 * 1: HW blink OR mode
+					 * 2: SW mode
+					 */
+			default-state = "off";
+			active-low;
+			blinking,hw-rx;
+			blinking,hw-tx;
+			blinking,sw;
+		};
+		led1: led@1 {
+			reg = <1>;
+			label = "LED_Port2";
+			port = <2>;
+			mode = <1>; 	/* 0: HW blink AND mode
+					 * 1: HW blink OR mode
+					 * 2: SW mode
+					 */
+			default-state = "off";
+			active-low;
+			blinking,hw-rx;
+			blinking,hw-tx;
+			blinking,sw;
+		};
+		led3: led@3 {
+			reg = <3>;
+			label = "LED_Port1";
+			port = <1>;
+			mode = <1>; 	/* 0: HW blink AND mode
+					 * 1: HW blink OR mode
+					 * 2: SW mode
+					 */
+			default-state = "off";
+			active-low;
+			blinking,hw-rx;
+			blinking,hw-tx;
+			blinking,sw;
+		};
+		led4: led@4 {
+			reg = <4>;
+			label = "LED_Port0";
+			port = <0>;
+			mode = <1>; 	/* 0: HW blink AND mode
+					 * 1: HW blink OR mode
+					 * 2: SW mode
+					 */
+			default-state = "off";
+			active-low;
+			blinking,hw-rx;
+			blinking,hw-tx;
+			blinking,sw;
+		};
+	};
+};

@@ -1,0 +1,106 @@
+/*
+ * rtk-ca8279-gpio.dtsi - Device Tree Include file for rtk gpio
+ *
+ */
+#include <dt-bindings/input/input.h>
+/ {        
+        rtk_gpio {
+		/* button purpose */
+                compatible = "realtek,g3hgu-gpio";
+                wps-gpio         = <&gpio3 7 GPIO_ACTIVE_LOW>;
+                wifi-gpio        = <&gpio3 3 GPIO_ACTIVE_LOW>;
+                board-reset-gpio = <&gpio0 8 GPIO_ACTIVE_LOW>;
+        };
+	gpio-keys {
+                compatible = "gpio-keys";
+                autorepeat;
+
+                btn_reset {
+                        label = "btn,reset";
+                        linux,code = <KEY_RESTART>;
+                        gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+                        autorepeat;
+                };
+                btn_wps {
+                        label = "btn,wps";
+                        linux,code = <KEY_WPS_BUTTON>;
+                        gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
+                        autorepeat;
+                };
+                btn_wifi {
+                        label = "btn,wifi";
+                        linux,code = <KEY_WLAN>;
+                        gpios = <&gpio3 3 GPIO_ACTIVE_LOW>;
+                        autorepeat;
+                };
+        };
+        rtk_gpio_led {
+		        compatible = "realtek,g3hgu-gpio-led";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				gpio-led0{
+					label = "LED_EPHY3";
+					led-gpio     = <&gpio0 0 GPIO_ACTIVE_LOW>;
+					linux,default-trigger = "netdev";
+				};
+				gpio-led1{
+					label = "LED_EPHY2";
+					led-gpio     = <&gpio0 1 GPIO_ACTIVE_LOW>;
+					linux,default-trigger = "netdev";
+				};
+				gpio-led2{
+					label = "LED_PPP_G";
+					led-gpio     = <&gpio0 2 GPIO_ACTIVE_LOW>;
+				};
+				gpio-led3{
+					label = "LED_EPHY1";
+					led-gpio     = <&gpio0 3 GPIO_ACTIVE_LOW>;
+					linux,default-trigger = "netdev";
+				};
+				/*
+				gpio-led4{
+					label = "LED_EPHY0";
+					led-gpio     = <&gpio0 4 GPIO_ACTIVE_LOW>;
+					linux,default-trigger = "netdev";
+				};*/
+				gpio-led5{
+					label = "LED_WPS";
+					led-gpio     = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+				};
+				/*
+				gpio-led6{
+					label = "LED_USB1";
+					led-gpio     = <&gpio0 6 GPIO_ACTIVE_LOW>;
+					linux,default-trigger = "usbdev";
+				};
+				*/
+				gpio-led7{
+					label = "LED_USB0";
+					led-gpio     = <&gpio0 7 GPIO_ACTIVE_HIGH>;
+					linux,default-trigger = "usbdev";
+				};
+				gpio-led8{
+					label = "LED_PON";	
+					led-gpio     = <&gpio0 9 GPIO_ACTIVE_LOW>;
+				};
+				gpio-led9{
+					label = "LED_LOS";
+					led-gpio     = <&gpio0 10 GPIO_ACTIVE_LOW>;
+				};
+				gpio-led10{
+					label = "LED_PWR_G";
+					led-gpio     = <&gpio0 11 GPIO_ACTIVE_HIGH>;
+				};
+				gpio-led11{
+					label = "LED_FXS";
+					led-gpio     = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+				};
+#if 0
+				gpio-led12{
+					reg = <0x10>;
+					label = "LED_RST";
+					led-gpio     = <&gpio0 30 GPIO_ACTIVE_LOW>;
+				};
+#endif				
+        };
+ };
