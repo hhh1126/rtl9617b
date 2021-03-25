@@ -132,7 +132,7 @@
 
 	ready-time = /bits/ 16 <150>; /* device with embedded OS system */
 
-	/*dma-coherent;*/
+	dma-coherent;
 	linux,pci-domain = <0>;
 	bus-range = <0x0 0x0>; /* save scan time */
 	num-lanes = <2>;
