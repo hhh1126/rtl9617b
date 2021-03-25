@@ -74,6 +74,14 @@
 #define DRV_AUTHOR	"Quantenna Communications Inc."
 #define DRV_DESC	"PCIe virtual Ethernet port driver"
 
+#ifdef CONFIG_FC_QTNA_WIFI_AX
+#define VMAC_INT_ALL_BITS (0	\
+	| PCIE_HDP_INT_EP_TXDMA		\
+	| PCIE_HDP_INT_EP_TXEMPTY	\
+	| PCIE_HDP_INT_HHBM_UF		\
+	| PCIE_HDP_INT_IPC		\
+	)
+#else
 #define VMAC_INT_ALL_BITS (0	\
 	| PCIE_HDP_INT_EP_TXDMA		\
 	| PCIE_HDP_INT_EP_TXEMPTY	\
@@ -81,6 +89,7 @@
 	| PCIE_HDP_INT_EP_RXDMA		\
 	| PCIE_HDP_INT_IPC		\
 	)
+#endif
 
 #define VMAC_INT_NAPI_BITS (0	\
 	| PCIE_HDP_INT_EP_TXDMA		\
@@ -983,8 +992,10 @@ static __attribute__ ((section(".sram.text")))
 	}
 	vmac_tx_done_update(vmp, i);
 	clear_bit(__TXDONE_INPROGRESS, &vmp->state);
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	/* Keep vmac_enable_intr out of txdone lock. */
 	vmac_enable_intr(vmp, PCIE_HDP_INT_EP_RXDMA);
+#endif
 }
 
 
