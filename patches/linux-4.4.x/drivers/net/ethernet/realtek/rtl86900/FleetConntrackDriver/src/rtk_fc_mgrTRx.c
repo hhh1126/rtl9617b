@@ -1020,6 +1020,7 @@ void rtk_fc_smp_wlan_tx_exec(unsigned long data)
 	struct sk_buff *skb;
 	rtk_fc_wlan_devidx_t wlan_dev_idx;
 	unsigned int wlanband;
+	bool if_wifiTxQ_stpopped = FALSE;
 
 	scheduleidx = atomic_read(&fc_mgr_db.wlantx_sched_idx[wlanTxSrcSmpId]);
 
@@ -1039,7 +1040,17 @@ void rtk_fc_smp_wlan_tx_exec(unsigned long data)
 		wlanband = fc_mgr_db.wlanDevMap[wlan_dev_idx].band;
 
 		//rtl8192cd_start_xmit(skb,dev);
-		ret = fc_mgr_db.wlanDevMap[wlan_dev_idx].wlan_native_devops->ndo_start_xmit(pOldestOne->smp_wlanTx_info.skb, pOldestOne->smp_wlanTx_info.skb->dev);
+		if(!netif_queue_stopped(pOldestOne->smp_wlanTx_info.skb->dev))
+		{
+			ret = fc_mgr_db.wlanDevMap[wlan_dev_idx].wlan_native_devops->ndo_start_xmit(pOldestOne->smp_wlanTx_info.skb, pOldestOne->smp_wlanTx_info.skb->dev);
+			if(ret != RTK_FC_DEVTX_OK)
+				dev_kfree_skb_any(skb); //free skb here
+		}
+		else
+		{
+			if_wifiTxQ_stpopped = TRUE;
+			dev_kfree_skb_any(skb); //wifi TX queue is stopped, free skb here
+		}
 
 		scheduleidx += 1;
 		scheduleidx &= (MAX_FC_WLAN_TX_QUEUE_SIZE-1);
@@ -1059,6 +1070,9 @@ void rtk_fc_smp_wlan_tx_exec(unsigned long data)
 				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TX+wlanband].smp_static[smp_processor_id()]);
 			else
 				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TX_DROP+wlanband].smp_static[smp_processor_id()]);
+
+			if(if_wifiTxQ_stpopped)
+				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TXQ_STOPPED_FREE_SKB+wlanband].smp_static[smp_processor_id()]);
 		}
 
 	}while((ret==RTK_FC_DEVTX_OK) && (pOldestOne) && (cnt-->0) && (time_is_after_jiffies(break_jiffies)));

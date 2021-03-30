@@ -468,6 +468,7 @@ rtk_fc_devtx_t rtk_fc_wlan_hard_start_xmit(rtk_fc_wlan_devidx_t wlan_dev_idx, st
 #if defined(CONFIG_SMP) && defined(CONFIG_RTK_L34_FC_IPI_WIFI_TX)
 	rtk_fc_mgr_dispatch_mode_t *wlanTxDispatch;
 #endif
+	bool if_wifiTxQ_stpopped = FALSE;
 		
 	if(unlikely((wlan_dev_idx >= RTK_FC_WLANX_END_INTF) || (fc_mgr_db.wlanDevMap[wlan_dev_idx].valid == FALSE))) {
 		FCMGR_ERR("ERROR: dev %s wlandevidx %d skb %p \n", skb->dev->name, wlan_dev_idx, skb); 
@@ -520,13 +521,28 @@ rtk_fc_devtx_t rtk_fc_wlan_hard_start_xmit(rtk_fc_wlan_devidx_t wlan_dev_idx, st
 #endif
 	{
 		// direct tx
-		wlanrc = fc_mgr_db.wlanDevMap[wlan_dev_idx].wlan_native_devops->ndo_start_xmit(skb, skb->dev);
+		if(!netif_queue_stopped(skb->dev))
+		{
+			wlanrc = fc_mgr_db.wlanDevMap[wlan_dev_idx].wlan_native_devops->ndo_start_xmit(skb, skb->dev);
+			if(wlanrc != RTK_FC_DEVTX_OK)
+				dev_kfree_skb_any(skb); //free skb here
+		}
+		else
+		{
+			if_wifiTxQ_stpopped = TRUE;
+			dev_kfree_skb_any(skb); //wifi TX queue is stopped, free skb here
+		}
+
 		if(unlikely(fc_mgr_db.smpStatistic)){
 		
 			if(RTK_FC_DEVTX_OK == wlanrc) {
 				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TX+fc_mgr_db.wlanDevMap[wlan_dev_idx].band].smp_static[smp_processor_id()]);
 			}else {
 				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TX_DROP+fc_mgr_db.wlanDevMap[wlan_dev_idx].band].smp_static[smp_processor_id()]);
+			}
+
+			if(if_wifiTxQ_stpopped) {
+				atomic_inc(&fc_mgr_db.mgr_smp_statistic[FC_MGR_SMP_WIFI_BAND0_TXQ_STOPPED_FREE_SKB+fc_mgr_db.wlanDevMap[wlan_dev_idx].band].smp_static[smp_processor_id()]);
 			}
 		}
 		
