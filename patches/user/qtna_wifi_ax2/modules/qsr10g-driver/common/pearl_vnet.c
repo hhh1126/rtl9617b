@@ -684,7 +684,9 @@ void inline vmac_tx_bd_index_inc(struct vmac_priv *vmp)
 	void *regbase = vmp->pcie_reg_base;
 	uint16_t i;
 
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	spin_lock_irqsave(&vmp->tx_index_lock, flags);
+#endif
 	if (vmac_fast_hdp(vmp)) {
 		uint32_t ihw;
 		i = VMAC_TX_INDEX_INC(vmp, vmp->tx_bd_index, 1);
@@ -702,7 +704,9 @@ void inline vmac_tx_bd_index_inc(struct vmac_priv *vmp)
 		i = VMAC_TX_INDEX_INC(vmp, i, 1);
 	}
 	vmp->tx_bd_index = i;
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	spin_unlock_irqrestore(&vmp->tx_index_lock, flags);
+#endif
 }
 
 /* Update the tx_done_index to new now and update the hw index if in irq*/
@@ -710,7 +714,9 @@ void inline vmac_tx_done_update(struct vmac_priv *vmp, uint16_t new)
 {
 	unsigned long flags;
 
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	spin_lock_irqsave(&vmp->tx_index_lock, flags);
+#endif
 
 	if (vmac_fast_hdp(vmp) && in_irq()) {
 		uint32_t ihw = (new << 16) | vmp->tx_host_ack_wrap | vmp->tx_prehw_index;
@@ -718,7 +724,9 @@ void inline vmac_tx_done_update(struct vmac_priv *vmp, uint16_t new)
 	}
 	vmp->tx_done_index = new;
 
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	spin_unlock_irqrestore(&vmp->tx_index_lock, flags);
+#endif
 }
 
 
