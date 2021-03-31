@@ -3740,6 +3740,11 @@ CONFIG_RTK_VOIP_LOG_IOCTL=y
 CONFIG_RTK_VOIP_LOG_IOCTL_SIZE=0x8000
 CONFIG_RTK_VOIP_LOG_IOCTL_TYPE_TEXT=y
 
+#
+# QCS
+#
+CONFIG_FC_QTNA_WIFI_AX=y
+
 # Enable SKB pool for packets from NIC(ETH) to WiFi
 # To reduce CPU usage which can avoid frequently alloc/free SKB operations
 CONFIG_RTL_ETH_RECYCLED_SKB=y
