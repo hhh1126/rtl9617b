@@ -264,10 +264,6 @@ static int vmaccnt2str(struct vmac_priv *vmp)
 	dbg_str(dbg, "intr_cnt:\t%08x\n", vmp->intr_cnt);
 	dbg_str(dbg, "pcie_int_en:\t%08x\n", vmp->pcie_int_en);
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	dbg_str(dbg, "skb_recycle_cnt:\t%08x\n", vmp->skb_recycle_cnt);
-	dbg_str(dbg, "skb_recycle_failures:\t%08x\n", vmp->skb_recycle_failures);
-#endif
 #ifdef QTN_RC_ENABLE_HDP
 	dbg_str(dbg, "fwt_loss_cnt:\t%08x\n", vmp->fwt_loss_cnt);
 #endif

@@ -261,14 +261,6 @@ struct vmac_priv {
 	/* io memory pointers */
 	__iomem qdpc_pcie_bda_t *bda;
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	struct sk_buff_head rx_skb_freelist;
-	spinlock_t rx_skb_freelist_lock;
-	uint32_t rx_skb_freelist_fill_level;
-	uint32_t skb_recycle_cnt;
-	uint32_t skb_recycle_failures;
-#endif
-
 	uint32_t ep_pmstate;
 	uint8_t *nl_buf;
 	size_t nl_len;

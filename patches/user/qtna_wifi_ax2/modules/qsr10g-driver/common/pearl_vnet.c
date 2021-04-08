@@ -390,85 +390,6 @@ static void free_pkt_info(struct net_device *ndev)
 	kfree(vmp->tx_buf_info);
 }
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-static inline struct sk_buff *__vmac_rx_skb_freelist_pop(struct vmac_priv *vmp)
-{
-	struct sk_buff *skb = __skb_dequeue(&vmp->rx_skb_freelist);
-
-	return skb;
-}
-
-static inline int vmac_rx_skb_freelist_push(struct vmac_priv *vmp,
-					    dma_addr_t buff_addr,
-					    struct sk_buff *skb)
-{
-	unsigned long flag;
-
-	if (skb_queue_len(&vmp->rx_skb_freelist) > QTN_RX_SKB_FREELIST_MAX_SIZE) {
-		pci_unmap_single(vmp->pdev, buff_addr, skb->len,
-				 (int)DMA_BIDIRECTIONAL);
-		dev_kfree_skb(skb);
-		vmp->vmac_skb_free++;
-		return 0;
-	}
-
-	/* check for undersize skb; this should never happen, and indicates problems elsewhere */
-	if (unlikely((skb_end_pointer(skb) - skb->head) < QTN_RX_BUF_MIN_SIZE)) {
-		pci_unmap_single(vmp->pdev, buff_addr, skb->len,
-				 (int)DMA_BIDIRECTIONAL);
-		dev_kfree_skb(skb);
-		vmp->vmac_skb_free++;
-		vmp->skb_recycle_failures++;
-		return -EINVAL;
-	}
-
-	skb->len = 0;
-	skb->tail = skb->data = skb->head;
-	skb_reserve(skb, NET_SKB_PAD);
-	skb_reserve(skb, align_buf_dma_offset(skb->data));
-
-	qtn_spin_lock_bh_save(&vmp->rx_skb_freelist_lock, &flag);
-	__skb_queue_tail(&vmp->rx_skb_freelist, skb);
-	qtn_spin_unlock_bh_restore(&vmp->rx_skb_freelist_lock, &flag);
-
-	vmp->skb_recycle_cnt++;
-
-	return 0;
-}
-
-static inline void __vmac_rx_skb_freelist_refill(struct vmac_priv *vmp)
-{
-	struct sk_buff *skb = NULL;
-	int num =
-	    vmp->rx_skb_freelist_fill_level -
-	    skb_queue_len(&vmp->rx_skb_freelist);
-
-	while (num > 0) {
-		if (!(skb = VMAC_DEV_ALLOC_SKB(SKB_BUF_SIZE))) {
-			vmp->rx_skb_alloc_failures++;
-			break;
-		}
-		/* Move skb->data to a cache line boundary */
-		skb_reserve(skb, align_buf_dma_offset(skb->data));
-		pci_map_single(vmp->pdev, skb->data,
-			       skb_end_pointer(skb) - skb->data,
-			       (int)DMA_FROM_DEVICE);
-		__skb_queue_tail(&vmp->rx_skb_freelist, skb);
-
-		num--;
-	}
-}
-
-static void vmac_rx_skb_freelist_purge(struct vmac_priv *vmp)
-{
-	unsigned long flag;
-
-	qtn_spin_lock_bh_save(&vmp->rx_skb_freelist_lock, &flag);
-	__skb_queue_purge(&vmp->rx_skb_freelist);
-	qtn_spin_unlock_bh_restore(&vmp->rx_skb_freelist_lock, &flag);
-}
-#endif				/* QTN_SKB_RECYCLE_SUPPORT */
-
 static inline bool check_netlink_magic(qdpc_cmd_hdr_t * cmd_hdr)
 {
 	return ((memcmp(cmd_hdr->dst_magic, QDPC_NETLINK_DST_MAGIC, ETH_ALEN) ==
@@ -659,13 +580,7 @@ static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 
 	skb_put(skb, len);
 	pci_unmap_single(vmp->pdev, rxinfo->pa,
-		skb_end_pointer(skb) - skb->data,
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-		(int)DMA_BIDIRECTIONAL
-#else
-		(int)DMA_FROM_DEVICE
-#endif
-		);
+		skb_end_pointer(skb) - skb->data,(int)DMA_FROM_DEVICE);
 
 	if (unlikely(vmac_rx_is_netlink_pkt(skb->data))) {
 		vmac_rx_netlink_pkt(ndev, skb);
@@ -798,11 +713,6 @@ static int __sram_text vmac_rx_poll(struct napi_struct *napi, int budget)
 		vmac_enable_intr(vmp, VMAC_INT_NAPI_BITS);
 	}
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	spin_lock(&vmp->rx_skb_freelist_lock);
-	__vmac_rx_skb_freelist_refill(vmp);
-	spin_unlock(&vmp->rx_skb_freelist_lock);
-#endif
 	return processed;
 }
 
@@ -818,16 +728,7 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 	    (uint32_t)topaz_hbm_get_payload_bus(TOPAZ_HBM_BUF_EMAC_RX_POOL);
 #else /* !QTN_RC_ENABLE_HDP */
 	struct sk_buff *skb = NULL;
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	spin_lock(&vmp->rx_skb_freelist_lock);
-	if (unlikely(!(skb = __vmac_rx_skb_freelist_pop(vmp)))) {
-		spin_unlock(&vmp->rx_skb_freelist_lock);
-		vmp->rx_buf_info[rx_bd_index].skb = NULL; /* prevent old packet from passing the packet up */
-		return -1;
-	}
-	spin_unlock(&vmp->rx_skb_freelist_lock);
-	buff_addr = virt_to_bus(skb->data);
-#else
+
 	if (!(skb = VMAC_DEV_ALLOC_SKB(SKB_BUF_SIZE))) {
 		vmp->rx_skb_alloc_failures++;
 		vmp->rx_buf_info[rx_bd_index].skb = NULL;/* prevent old packet from passing the packet up */
@@ -839,7 +740,7 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 	buff_addr = pci_map_single(vmp->pdev, skb->data,
 				   skb_end_pointer(skb) - skb->data,
 				   (int)DMA_FROM_DEVICE);
-#endif				/* QTN_SKB_RECYCLE_SUPPORT */
+
 	skb->dev = ndev;
 	vmp->rx_buf_info[rx_bd_index].skb = skb;
 #endif /* end of QTN_RC_ENABLE_HDP */
@@ -968,13 +869,9 @@ static __attribute__ ((section(".sram.text")))
 		txinfo->pa = 0;
 #else
 		ndev->stats.tx_bytes += skb->len;
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-		vmac_rx_skb_freelist_push(vmp, info->pa, skb);
-#else
 		pci_unmap_single(vmp->pdev, txinfo->pa,
 				 skb->len, (int)DMA_TO_DEVICE);
 		dev_kfree_skb_irq(skb);
-#endif				/* QTN_SKB_RECYCLE_SUPPORT */
 		txinfo->skb = NULL;
 #endif				/* QTN_RC_ENABLE_HDP */
 
@@ -1000,13 +897,7 @@ static dma_addr_t inline vmac_tx_skb_store(struct vmac_priv *vmp,
 	uintptr_t baddr;
 
 	txinfo->skb = skb;
-	baddr = pci_map_single(vmp->pdev, skb->data, skb->len,
-#if !defined(QTN_RC_ENABLE_HDP) && defined(QTN_SKB_RECYCLE_SUPPORT)
-			(int)DMA_BIDIRECTIONAL
-#else
- 			(int)DMA_TO_DEVICE
-#endif
-			);
+	baddr = pci_map_single(vmp->pdev, skb->data, skb->len, (int)DMA_TO_DEVICE);
 	txinfo->pa = baddr;
 	return baddr;
 }
@@ -1630,14 +1521,6 @@ int vmac_net_init(struct pci_dev *pdev)
 	spin_lock_init(&vmp->tx_index_lock);
 	vmp->tx_wake_q_threshold = 2 * (uint16_t)txpkt_per_intr;
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	spin_lock_init(&vmp->rx_skb_freelist_lock);
-	skb_queue_head_init(&vmp->rx_skb_freelist);
-	vmp->rx_skb_freelist_fill_level = QTN_RX_SKB_FREELIST_FILL_SIZE;
-	vmp->skb_recycle_cnt = 0;
-	vmp->skb_recycle_failures = 0;
-#endif
-
 	if (!vmac_fast_hdp(vmp) && vmp->tx_bd_num > PCIE_HHBM_MAX_SIZE) {
 		printk("Error: The length of TX BD array is too much\n");
 		goto vnet_init_err_0;
@@ -1679,10 +1562,6 @@ int vmac_net_init(struct pci_dev *pdev)
 	if (alloc_bd_tbl(ndev))
 		goto vnet_init_err_1;
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	__vmac_rx_skb_freelist_refill(vmp);
-#endif
-
 	if (alloc_and_init_rxbuffers(ndev))
 		goto vnet_init_err_2;
 
@@ -1714,10 +1593,6 @@ int vmac_net_init(struct pci_dev *pdev)
 	INIT_WORK(&vmp->low_pwr_work, vmac_put_ep_low_pwr);
 	vmp->ep_under_low_pwr = false;
 
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	__vmac_rx_skb_freelist_refill(vmp);
-#endif
-
 #ifdef QTN_RC_ENABLE_HDP
 	tqe_lhost_add_pcie_handler(&vmac_hdp_tx, ndev);
 #endif
@@ -1726,9 +1601,6 @@ int vmac_net_init(struct pci_dev *pdev)
  vnet_init_err_3:
 	free_rx_skbs(vmp);
  vnet_init_err_2:
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	vmac_rx_skb_freelist_purge(vmp);
-#endif
 	free_bd_tbl(vmp);
  vnet_init_err_1:
 	free_pkt_info(ndev);
@@ -1815,9 +1687,6 @@ void vmac_clean(struct net_device *ndev)
 	free_rx_skbs(vmp);
 	free_tx_skbs(vmp);
 	free_pkt_info(ndev);
-#ifdef QTN_SKB_RECYCLE_SUPPORT
-	vmac_rx_skb_freelist_purge(vmp);
-#endif
 
 	disable_ep_rst_detection(ndev);
 
