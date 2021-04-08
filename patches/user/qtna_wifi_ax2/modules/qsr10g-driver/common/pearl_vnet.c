@@ -125,6 +125,10 @@ static int vmac_close(struct net_device *ndev);
 static int vmac_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd);
 static int vmac_change_mtu(struct net_device *netdev, int new_mtu);
 
+#if defined(CONFIG_RTL_ETH_RECYCLED_SKB)
+extern struct sk_buff *dev_alloc_skb_recy_eth(unsigned int size);
+#endif
+
 #define VMAC_RX_BD_LEN		(sizeof(struct vmac_rx_bd))
 #define VMAC_TX_BD_LEN		(sizeof(struct vmac_tx_bd))
 
@@ -490,6 +494,9 @@ static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 
 	skb_put(skb, len);
 
+#ifdef CONFIG_FC_QTNA_WIFI_AX
+	if(vmp->pdev==NULL || vmp->pdev->dev.archdata.dma_coherent==0)
+#endif
 	pci_unmap_single(vmp->pdev,
                          rxinfo->pa,
 		         skb_end_pointer(skb) - skb->data,
@@ -630,7 +637,12 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 
 	struct sk_buff *skb = NULL;
 
-	if (!(skb = VMAC_DEV_ALLOC_SKB(SKB_BUF_SIZE))) {
+#if defined(CONFIG_RTL_ETH_RECYCLED_SKB)
+	skb = dev_alloc_skb_recy_eth(SKB_BUF_SIZE);
+#else
+	skb = VMAC_DEV_ALLOC_SKB(SKB_BUF_SIZE);
+#endif
+        if ( !skb ){
 		vmp->rx_skb_alloc_failures++;
 		vmp->rx_buf_info[rx_bd_index].skb = NULL;/* prevent old packet from passing the packet up */
 		return -1;
@@ -639,6 +651,11 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 	/* Move skb->data to a cache line boundary */
 	skb_reserve(skb, align_buf_dma_offset(skb->data) + 2);
 
+#ifdef CONFIG_FC_QTNA_WIFI_AX
+	if(vmp->pdev && vmp->pdev->dev.archdata.dma_coherent)
+		buff_addr = virt_to_bus(skb->data);
+	else
+#endif
 	/* Invalidate cache and map virtual address to bus address. */
 	buff_addr = pci_map_single(vmp->pdev,
                                    skb->data,
@@ -765,6 +782,9 @@ static __attribute__ ((section(".sram.text")))
 		ndev->stats.tx_packets++;
 		ndev->stats.tx_bytes += skb->len;
 
+#ifdef CONFIG_FC_QTNA_WIFI_AX
+		if(vmp->pdev==NULL || vmp->pdev->dev.archdata.dma_coherent==0)
+#endif
 		pci_unmap_single(vmp->pdev,
                                  txinfo->pa,
                                  skb->len,
@@ -797,7 +817,15 @@ static dma_addr_t inline vmac_tx_skb_store(struct vmac_priv *vmp,
 	uintptr_t baddr;
 
 	txinfo->skb = skb;
-	baddr = pci_map_single(vmp->pdev, skb->data, skb->len, (int)DMA_TO_DEVICE);
+#ifdef CONFIG_FC_QTNA_WIFI_AX
+	if(vmp->pdev && vmp->pdev->dev.archdata.dma_coherent)
+		baddr = virt_to_bus(skb->data);
+	else
+#endif
+	baddr = pci_map_single(vmp->pdev,
+                               skb->data,
+                               skb->len,
+                               (int)DMA_TO_DEVICE);
 	txinfo->pa = baddr;
 
 	return baddr;
@@ -847,10 +875,12 @@ int __attribute__ ((section(".sram.text")))
 		return NETDEV_TX_BUSY;
 	}
 
+#ifndef CONFIG_FC_QTNA_WIFI_AX
 	if (VMAC_TX_INDEX_INC(vmp, i, 2) == vmp->tx_done_index) {
 		netif_stop_queue(ndev);
 		vmp->tx_q_stop_cnt++;
 	}
+#endif
 
 	tbdp = &vmp->tx_bd_base[i];
 	txinfo = &vmp->tx_buf_info[i];
