@@ -31,9 +31,6 @@
 #include "qdpc_init.h"
 #include "pearl_pcie.h"
 #include "qtn_pcie_dbg.h"
-#ifdef QTN_RC_ENABLE_HDP
-#include "qtn/dmautil.h"
-#endif
 #define SKB_BUF_SIZE_DBG		(2048)
 #define MAX_RUNTIME_DUMP_BD_NUM		(5)
 #define VMAC_MAX_PRINT_BUF		(1 * 1024 * 1024 - 2 * sizeof(int))
@@ -156,25 +153,17 @@ static int rxbd2str_range(struct vmac_priv *vmp, uint16_t s, int num)
 	struct rx_buf_info_t *rxinfo;
 	char *iflag;
 
-#ifdef QTN_RC_ENABLE_HDP
-	dbg_str(dbg, "rxindx rbdaddr\t\tbuff\t\tinfo\t\tpa\n");
-#else
 	dbg_str(dbg, "rxindx rbdaddr\t\tbuff\t\tinfo\t\tpa\t\trx_skb\n");
-#endif
+
 	for (i = 0; i < num; i++) {
 		rbdp = &vmp->rx_bd_base[s];
 		rxinfo = &vmp->rx_buf_info[s];
-
 		iflag = (s == vmp->rx_bd_index) ? "Rx" : " ";
-#ifdef QTN_RC_ENABLE_HDP
-		dbg_str(dbg, "%3u %3s %p\t%p\t%08x\t%p\n",
-			(uint32_t)s, iflag, rbdp, (void *)vmac_mergell(rbdp->buff_addr, rbdp->buff_addr_h),
-			rbdp->buff_info, (void *)rxinfo->pa);
-#else
+
 		dbg_str(dbg, "%3u %3s %p\t%p\t%08x\t%p\t%p\n",
 			(uint32_t)s, iflag, rbdp, (void *)vmac_mergell(rbdp->buff_addr, rbdp->buff_addr_h),
 			rbdp->buff_info, (void *)rxinfo->pa, rxinfo->skb);
-#endif
+
 		s = VMAC_RX_INDEX_INC(vmp, s, 1);
 	}
 	return dbg->wr;
@@ -264,9 +253,6 @@ static int vmaccnt2str(struct vmac_priv *vmp)
 	dbg_str(dbg, "intr_cnt:\t%08x\n", vmp->intr_cnt);
 	dbg_str(dbg, "pcie_int_en:\t%08x\n", vmp->pcie_int_en);
 
-#ifdef QTN_RC_ENABLE_HDP
-	dbg_str(dbg, "fwt_loss_cnt:\t%08x\n", vmp->fwt_loss_cnt);
-#endif
 	return dbg->wr;
 }
 

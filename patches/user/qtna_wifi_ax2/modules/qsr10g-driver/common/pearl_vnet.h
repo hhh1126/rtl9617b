@@ -130,28 +130,13 @@ struct vmac_cfg {
 	struct net_device *dev;
 };
 
-#if defined(QTN_RC_ENABLE_HDP)
-enum pkt_type {
-	PKT_SKB = 0,
-	PKT_TQE
-};
-#endif
-
 struct tx_buf_info_t {
 	struct sk_buff *skb;
 	uintptr_t pa; /* packet buffer physical address */
-#if defined(QTN_RC_ENABLE_HDP)
-	uint16_t len;
-	uint8_t type;
-	uint8_t rsv;
-#else
-#endif
 };
 
 struct rx_buf_info_t {
-#if !defined(QTN_RC_ENABLE_HDP)
 	struct sk_buff *skb;
-#endif
 	uintptr_t pa; /* packet buffer physical address */
 };
 
@@ -215,9 +200,6 @@ struct vmac_priv {
 	uint32_t rx_skb_alloc_failures;
 	bool rx_buf_unflow;
 
-#ifdef QTN_RC_ENABLE_HDP
-	uint32_t fwt_loss_cnt;
-#endif
 	uint32_t irq_txdone_cnt;
 	uint32_t xmit_txdone_cnt;
 
@@ -292,7 +274,6 @@ static inline void qtn_spin_unlock_bh_restore(spinlock_t * lock,
 	}
 }
 
-#ifndef QTN_RC_ENABLE_HDP
 /* Alignment helper functions */
 __always_inline static unsigned long align_up_off(unsigned long val,
 						  unsigned long step)
@@ -346,7 +327,6 @@ __always_inline static unsigned long align_buf_cache_size(void *addr,
 	return align_val_up(size + align_buf_cache_offset(addr),
 			    dma_get_cache_alignment());
 }
-#endif
 
 static inline bool vmac_fast_hdp(struct vmac_priv *vmp)
 {

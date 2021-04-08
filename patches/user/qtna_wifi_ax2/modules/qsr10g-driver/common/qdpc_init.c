@@ -175,18 +175,12 @@ static int qtn_ep_fw_send(struct pci_dev *pdev, uint32_t size, uint32_t max_pkt_
 	int hds = sizeof(struct pearl_pcie_fwhd);
 	int dlen = 0;
 
-#ifndef QTN_RC_ENABLE_HDP
 	/* Need allocate extra MPS bytes for alignment later due to hardware limitation */
 	skb = VMAC_DEV_ALLOC_SKB(max_pkt_len + tlp_mps);
-#else
-	skb = VMAC_DEV_ALLOC_SKB(max_pkt_len);
-#endif
 	if (!skb)
 		return -1;
-#ifndef QTN_RC_ENABLE_HDP
 	/*align data to MPS boudary for hardware */
 	skb_reserve(skb, align_up_off((unsigned long)skb->data, tlp_mps));
-#endif
 	skb->len = max_pkt_len;
 	skb->dev = ndev;
 
@@ -466,9 +460,6 @@ static int qdpc_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 /* Create and start the thread to initiate the INIT Handshake*/
 	qdpc_bringup_fw(priv);
 	ndev->netdev_ops->ndo_change_mtu(ndev, ndev->mtu);
-#ifdef QTN_RC_ENABLE_HDP
-	qdpc_wps_button_init(ndev);
-#endif
 
 	/* Create netlink & register with kernel */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0)
@@ -566,17 +557,9 @@ static inline int qdpc_pcie_set_power_state(struct pci_dev *pdev,
 
 	switch (state) {
 	case PCI_D0:
-#ifdef QTN_RC_ENABLE_HDP
-		if ((readl(IO_ADDRESS(RUBY_SYS_CTL_CSR)) & 0xff) == TOPAZ_BOARD_REVA2)
-			pci_write_config_word(pdev, TOPAZ_PCI_PM_CTRL_OFFSET,
-					      (pmcsr & ~PCI_PM_CTRL_STATE_MASK)
-					      | (PCI_D0 |
-						 PCI_PM_CTRL_PME_ENABLE));
-		else
-#endif
-			pci_write_config_word(pdev, TOPAZ_PCI_PM_CTRL_OFFSET,
-					      (pmcsr & ~PCI_PM_CTRL_STATE_MASK)
-					      | PCI_D0);
+		pci_write_config_word(pdev, TOPAZ_PCI_PM_CTRL_OFFSET,
+				      (pmcsr & ~PCI_PM_CTRL_STATE_MASK)
+                                      | PCI_D0);
 		break;
 
 	case PCI_D3hot:
@@ -690,20 +673,6 @@ int qdpc_pcie_resume(struct pci_dev *pdev)
 	pci_restore_state(pdev);
 	qdpc_pcie_set_power_state(pdev, PCI_D0);
 
-#ifdef QTN_RC_ENABLE_HDP
-	/* Version C board ignore the interrupt here. Because current PCIE
-	 * link is in L1 in which EP's memory is not accessible.
-	 * Instead C board's EP adds a timer to check the PCIe power state
-	 * periodically, if power state change to D3hot, EP will do
-	 * IPC_EP_PM_CTRL handler's job
-	 */
-	if ((readl(IO_ADDRESS(RUBY_SYS_CTL_CSR)) & 0xff) == TOPAZ_BOARD_REVA2) {
-		msleep(5000);
-
-		priv->ep_pmstate = PCI_D0;
-		barrier();
-	} else
-#endif
 	{
 		priv->ep_pmstate = PCI_D0;
 		barrier();
@@ -776,10 +745,6 @@ static void __exit qdpc_exit_module(void)
 
 	/* Unregister the pci driver with the device */
 	pci_unregister_driver(&qdpc_pcie_driver);
-
-#ifdef QTN_RC_ENABLE_HDP
-	qdpc_wps_button_exit();
-#endif
 
 	return;
 }

@@ -38,17 +38,6 @@
 #include <linux/spinlock.h>
 #include <linux/timex.h>
 
-#ifdef QTN_RC_ENABLE_HDP
-#include <linux/netdevice.h>
-#include <linux/net/bridge/br_public.h>
-
-#include <qtn/topaz_tqe.h>
-#include <qtn/topaz_hbm_cpuif.h>
-#include <qtn/topaz_fwt_db.h>
-#include <topaz_pcie_tqe.h>
-#include <qtn/topaz_hbm.h>
-#endif
-
 #include <qdpc_platform.h>
 
 #include <asm/cache.h>		/* For cache line size definitions */
@@ -96,11 +85,7 @@ MODULE_DESCRIPTION(DRV_DESC);
 MODULE_LICENSE("GPL");
 
 #undef __sram_text
-#ifdef QTN_RC_ENABLE_HDP
-#define __sram_text		__attribute__ ((__section__ (__sram_text_sect_name)))
-#else
 #define __sram_text
-#endif
 
 static int vmac_rx_poll(struct napi_struct *napi, int budget);
 static int skb2rbd_attach(struct net_device *ndev, uint16_t i);
@@ -130,9 +115,6 @@ static int vmac_close(struct net_device *ndev);
 static int vmac_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd);
 static int vmac_change_mtu(struct net_device *netdev, int new_mtu);
 
-#ifdef QTN_RC_ENABLE_HDP
-#define HOST_RXDESC_WRAP	(0X8000)
-#endif
 #define VMAC_RX_BD_LEN		(sizeof(struct vmac_rx_bd))
 #define VMAC_TX_BD_LEN		(sizeof(struct vmac_tx_bd))
 
@@ -466,19 +448,11 @@ static int vmac_rx_is_netlink_pkt(void *pkt_header)
 	return (ntohs(eth->h_proto) == QDPC_APP_NETLINK_TYPE);
 }
 
-#ifdef QTN_RC_ENABLE_HDP
-void vmac_rx_netlink_pkt(struct net_device *ndev, dma_addr_t baddr, int len)
-#else
 void vmac_rx_netlink_pkt(struct net_device *ndev, struct sk_buff *skb)
-#endif
 {
 	qdpc_cmd_hdr_t *cmd_hdr;
 	unsigned char *data;
-#ifdef QTN_RC_ENABLE_HDP
-	data = (unsigned char *) bus_to_virt(baddr);
-#else
 	data = skb->data;
-#endif
 
 	/* Double Check if it's netlink packet */
 	cmd_hdr = (qdpc_cmd_hdr_t *)data;
@@ -489,69 +463,10 @@ void vmac_rx_netlink_pkt(struct net_device *ndev, struct sk_buff *skb)
 				ntohs(cmd_hdr->rpc_type),
 				ntohs(cmd_hdr->total_len));
 	}
-
-#ifdef QTN_RC_ENABLE_HDP
-	inv_dcache_range((unsigned long)baddr, (unsigned long)baddr + len);
-	topaz_hbm_put_buf((void *)baddr, TOPAZ_HBM_BUF_EMAC_RX_POOL);
-#else
 	dev_kfree_skb(skb);
-#endif
 }
-
-#ifdef QTN_RC_ENABLE_HDP
-static inline void vmac_rx_forward(struct vmac_priv *vmp, uint32_t bdata,
-				   uint16_t len, const void *vdata)
-{
-	const struct ethhdr *eth;
-	union tqe_cpuif_descr desc;
-	fwt_db_entry *fwt_ent;
-	struct sk_buff *skb;
-	int push_count;
-	uint16_t vlan_id = 0;
-	/* FIXME-PEARL_VLAN - set vlan id in desc.data.vlan, desc.data.vlan_id, skb->hw_vlan_id? */
-
-	eth = vdata;
-	if (is_multicast_ether_addr(eth->h_dest)) {
-		int8_t pool = topaz_hbm_payload_get_pool_bus((void *)bdata);
-		union tqe_cpuif_descr *desc_p = &desc;
-
-		memset(&desc, 0, sizeof(desc));
-		TQE_DESCR_DATA_ITEM_SET(desc_p, buff_ptr_offset,
-			topaz_hbm_payload_buff_ptr_offset_bus((void *)bdata, pool, NULL));
-		desc.data.length = len;
-		desc.data.in_port = TOPAZ_TQE_PCIE_REL_PORT;
-		desc.data.pkt = (void *)bdata;
-
-		push_count = tqe_rx_multicast(NULL, &desc);
-		if (push_count > 0)
-			return;
-	} else {
-		fwt_ent = vmac_get_tqe_ent(eth->h_source, eth->h_dest, vlan_id);
-		if (likely(fwt_ent)) {
-			topaz_pcie_tqe_xmit(fwt_ent, (void *)bdata, len);
-			return;
-		} else {
-			vmp->fwt_loss_cnt++;
-		}
-	}
-
-	skb =
-	    topaz_hbm_attach_skb((void *)vdata, TOPAZ_HBM_BUF_EMAC_RX_POOL, 0);
-	if (likely(skb)) {
-		skb_put(skb, len);
-		skb->protocol = eth_type_trans(skb, vmp->ndev);
-		skb->src_port = 0;
-		netif_receive_skb(skb);
-	} else {
-		printk(KERN_ERR "Failed to attach skb\n");
-		topaz_hbm_put_buf(topaz_hbm_payload_store_align_bus
-				  ((void *)bdata, TOPAZ_HBM_BUF_EMAC_RX_POOL,
-				   0), TOPAZ_HBM_BUF_EMAC_RX_POOL);
-	}
-}
-#endif
  
-#if defined(CONFIG_FC_QTNA_WIFI_AX)
+#ifdef CONFIG_FC_QTNA_WIFI_AX
 extern int rtk_fc_fastfwd_netif_rx(struct sk_buff *skb);
 #endif
 
@@ -559,28 +474,16 @@ static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 		struct rx_buf_info_t *rxinfo, int len)
 {
 	struct vmac_priv *vmp = netdev_priv(ndev);
-#ifdef QTN_RC_ENABLE_HDP
-	uintptr_t baddr = rxinfo->pa;
-	char *vdata = (char *)bus_to_virt(baddr);
-
-	if (!baddr)
-		return false;
-
-	if (unlikely(vmac_rx_is_netlink_pkt(vdata))) {
-		vmac_rx_netlink_pkt(ndev, baddr, len);
-		return false;
-	} else {
-		dump_rx_pkt(vmp, vdata, len);
-		vmac_rx_forward(vmp, baddr, len, (void *)vdata);
-	}
-#else
 	struct sk_buff *skb = rxinfo->skb;
 	if (!skb)
 		return false;
 
 	skb_put(skb, len);
-	pci_unmap_single(vmp->pdev, rxinfo->pa,
-		skb_end_pointer(skb) - skb->data,(int)DMA_FROM_DEVICE);
+
+	pci_unmap_single(vmp->pdev,
+                         rxinfo->pa,
+		         skb_end_pointer(skb) - skb->data,
+                         (int)DMA_FROM_DEVICE);
 
 	if (unlikely(vmac_rx_is_netlink_pkt(skb->data))) {
 		vmac_rx_netlink_pkt(ndev, skb);
@@ -589,13 +492,12 @@ static inline bool vmac_rxpkt_handup(struct net_device *ndev,
 
 	dump_rx_pkt(vmp, (char *)skb->data, (int)skb->len);
 	skb->protocol = eth_type_trans(skb, ndev);
-#if defined(CONFIG_FC_QTNA_WIFI_AX)
+#ifdef CONFIG_FC_QTNA_WIFI_AX
         rtk_fc_fastfwd_netif_rx(skb);
 #else
 	netif_receive_skb(skb);
 #endif
 
-#endif
 	return true;
 }
 
@@ -622,14 +524,7 @@ static noinline bool vmac_skip_bad_rbd(struct vmac_priv *vmp,
 		tmp = vmp->rx_bd_num_msk;
 
 	if (tmp < VMAC_HHBM_UNFLOW_TH) {
-#ifdef QTN_RC_ENABLE_HDP
-		uintptr_t baddr = rxinfo->pa;
-		inv_dcache_range((unsigned long)baddr, (unsigned long)baddr +
-			TOPAZ_HBM_BUF_EMAC_RX_SIZE);
-		topaz_hbm_put_buf((void *)baddr, TOPAZ_HBM_BUF_EMAC_RX_POOL);
-#else
-		dev_kfree_skb(rxinfo->skb);
-#endif
+	        dev_kfree_skb(rxinfo->skb);
 		vmp->ndev->stats.rx_errors++;
 		return true;
 	}
@@ -723,10 +618,6 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 	volatile struct vmac_rx_bd *rbdp;
 	dma_addr_t buff_addr;
 
-#ifdef QTN_RC_ENABLE_HDP
-	buff_addr =
-	    (uint32_t)topaz_hbm_get_payload_bus(TOPAZ_HBM_BUF_EMAC_RX_POOL);
-#else /* !QTN_RC_ENABLE_HDP */
 	struct sk_buff *skb = NULL;
 
 	if (!(skb = VMAC_DEV_ALLOC_SKB(SKB_BUF_SIZE))) {
@@ -734,17 +625,19 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 		vmp->rx_buf_info[rx_bd_index].skb = NULL;/* prevent old packet from passing the packet up */
 		return -1;
 	}
-		/* Move skb->data to a cache line boundary */
+
+	/* Move skb->data to a cache line boundary */
 	skb_reserve(skb, align_buf_dma_offset(skb->data) + 2);
-		/* Invalidate cache and map virtual address to bus address. */
-	buff_addr = pci_map_single(vmp->pdev, skb->data,
+
+	/* Invalidate cache and map virtual address to bus address. */
+	buff_addr = pci_map_single(vmp->pdev,
+                                   skb->data,
 				   skb_end_pointer(skb) - skb->data,
 				   (int)DMA_FROM_DEVICE);
 
 	skb->dev = ndev;
-	vmp->rx_buf_info[rx_bd_index].skb = skb;
-#endif /* end of QTN_RC_ENABLE_HDP */
 
+	vmp->rx_buf_info[rx_bd_index].skb = skb;
 	vmp->rx_buf_info[rx_bd_index].pa = buff_addr;
 
 	rbdp = &vmp->rx_bd_base[rx_bd_index];
@@ -757,6 +650,7 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev,
 		vmac_writell_hi(buff_addr, PCIE_HDP_HHBM_BUF_PTR_H(vmp->pcie_reg_base));
 		vmac_writel(buff_addr, PCIE_HDP_HHBM_BUF_PTR(vmp->pcie_reg_base));
 	}
+
 	rbdp->buff_info = 0;
 
 	return 0;
@@ -842,38 +736,24 @@ static __attribute__ ((section(".sram.text")))
 
 	while (dma_done_num-- != 0) {
 		struct tx_buf_info_t *txinfo = &vmp->tx_buf_info[i];
-#ifdef QTN_RC_ENABLE_HDP
-		if (!txinfo->pa) {
-#else
 		struct sk_buff *skb;
 		skb = txinfo->skb;
 		if (!skb) {
-#endif
 			vmp->tx_free_err++;
 			break;
 		}
 		tbdp = &vmp->tx_bd_base[i];
 
 		ndev->stats.tx_packets++;
-
-#ifdef QTN_RC_ENABLE_HDP
-		if (txinfo->type == PKT_TQE) {
-			topaz_hbm_put_buf((void *)txinfo->pa,
-				TOPAZ_HBM_BUF_EMAC_RX_POOL);
-		} else {
-			pci_unmap_single(vmp->pdev, txinfo->pa,
-				txinfo->len, (int)DMA_TO_DEVICE);
-			dev_kfree_skb_irq(txinfo->skb);
-		}
-		ndev->stats.tx_bytes += txinfo->len;
-		txinfo->pa = 0;
-#else
 		ndev->stats.tx_bytes += skb->len;
-		pci_unmap_single(vmp->pdev, txinfo->pa,
-				 skb->len, (int)DMA_TO_DEVICE);
+
+		pci_unmap_single(vmp->pdev,
+                                 txinfo->pa,
+                                 skb->len,
+                                 (int)DMA_TO_DEVICE);
+
 		dev_kfree_skb_irq(skb);
 		txinfo->skb = NULL;
-#endif				/* QTN_RC_ENABLE_HDP */
 
 		if (in_irq())
 			vmp->irq_txdone_cnt++;
@@ -899,6 +779,7 @@ static dma_addr_t inline vmac_tx_skb_store(struct vmac_priv *vmp,
 	txinfo->skb = skb;
 	baddr = pci_map_single(vmp->pdev, skb->data, skb->len, (int)DMA_TO_DEVICE);
 	txinfo->pa = baddr;
+
 	return baddr;
 }
 
@@ -907,47 +788,8 @@ void qdpc_pcie_notify_ep_new_packet(struct vmac_priv *priv)
 	writel(TOPAZ_SET_INT(IPC_RC_NEW_PKT), priv->ep_ipc_reg);
 }
 
-#ifdef QTN_RC_ENABLE_HDP
-static dma_addr_t inline vmp_hdp_pkt_store(struct vmac_priv *vmp,
-		struct tx_buf_info_t *txinfo, void *pkt_handle,
-		enum pkt_type pkt_type)
-{
-	uintptr_t baddr;
-	int len;
-
-	if (pkt_type == PKT_TQE) {
-		union pearl_tqe_pcieif_descr *tqe_desc
-		    = (union pearl_tqe_pcieif_descr *)pkt_handle;
-		baddr = (dma_addr_t)tqe_desc->data.pkt;
-		txinfo->pa = baddr;
-		len = tqe_desc->data.length;
-	} else {
-		struct sk_buff *skb = pkt_handle;
-		baddr = vmac_tx_skb_store(vmp, txinfo, skb);
-		len = skb->len;
-	}
-	txinfo->type= pkt_type;
-	txinfo->len = len;
-	return baddr;
-}
-
-static int vmac_tx(void *pkt_handle, struct net_device *ndev, enum pkt_type pkt_type);
-int vmac_hard_start_xmit(struct sk_buff *skb, struct net_device *ndev)
-{
-	return vmac_tx((void *)skb, ndev, PKT_SKB);
-}
-
-void vmac_hdp_tx(void *pkt_handle, struct net_device *ndev)
-{
-	(void)vmac_tx(pkt_handle, ndev, PKT_TQE);
-}
-
-static int __attribute__ ((section(".sram.text")))
-    vmac_tx(void *pkt_handle, struct net_device *ndev, enum pkt_type pkt_type)
-#else /* !QTN_RC_ENABLE_HDP */
 int __attribute__ ((section(".sram.text")))
     vmac_hard_start_xmit(struct sk_buff *skb, struct net_device *ndev)
-#endif
 {
 	struct vmac_priv *vmp = netdev_priv(ndev);
 	uint16_t i;	/* tx index */
@@ -955,31 +797,12 @@ int __attribute__ ((section(".sram.text")))
 	struct tx_buf_info_t *txinfo;
 	int len;
 	uintptr_t baddr;
-#ifdef	QTN_RC_ENABLE_HDP
-	union pearl_tqe_pcieif_descr *tqe_desc = (union pearl_tqe_pcieif_descr *)pkt_handle;
-	struct sk_buff *skb = (struct sk_buff *)pkt_handle;
-#endif
 
-#ifdef QTN_RC_ENABLE_HDP
-	if (pkt_type == PKT_TQE)
-		len = tqe_desc->data.length;
-	else
-		len = skb->len;
-#else
 	len = skb->len;
-#endif
 
 	if (len > vmp->dma_threshold) {
 		vmp->tx_oversize_cnt++;
-#ifdef QTN_RC_ENABLE_HDP
-		if (pkt_type == PKT_TQE) {
-			baddr = (dma_addr_t)tqe_desc->data.pkt;
-			topaz_hbm_put_buf((void *)baddr, TOPAZ_HBM_BUF_EMAC_RX_POOL);
-		} else
-			dev_kfree_skb_any(skb);
-#else
 		dev_kfree_skb_any(skb);
-#endif
 		return NETDEV_TX_OK;
 	}
 
@@ -1004,23 +827,17 @@ int __attribute__ ((section(".sram.text")))
 		return NETDEV_TX_BUSY;
 	}
 
-#ifndef QTN_RC_ENABLE_HDP
 	if (VMAC_TX_INDEX_INC(vmp, i, 2) == vmp->tx_done_index) {
 		netif_stop_queue(ndev);
 		vmp->tx_q_stop_cnt++;
 	}
-#endif
 
 	tbdp = &vmp->tx_bd_base[i];
 	txinfo = &vmp->tx_buf_info[i];
 
-#ifdef QTN_RC_ENABLE_HDP
-	baddr = vmp_hdp_pkt_store(vmp, txinfo, pkt_handle, pkt_type);
-	len = txinfo->len;
-#else
 	baddr = vmac_tx_skb_store(vmp, txinfo, skb);
 	len = skb->len;
-#endif
+
 	vmac_set_bd_paddr(baddr, tbdp);
 	vmac_writel(len, &tbdp->buff_info);
 
@@ -1141,9 +958,7 @@ static irqreturn_t vmac_interrupt(int irq, void *dev_id)
 	if (intflag & PCIE_HDP_INT_EP_RXDMA) {
 		vmp->tx_intr_cnt++;
 		vmac_tx_teardown(ndev);
-#ifndef QTN_RC_ENABLE_HDP
 		vmac_try_wake_txqueue(ndev);
-#endif
 	}
 
 	if (intflag & (VMAC_INT_NAPI_BITS)) {
@@ -1531,9 +1346,6 @@ int vmac_net_init(struct pci_dev *pdev)
 	ndev->irq = pdev->irq;
 
 	ndev->if_port = QDPC_PLATFORM_IFPORT;
-#ifdef QTN_RC_ENABLE_HDP
-	ndev->if_port =  tqe_pcie_port_get();
-#endif
 
 	ndev->watchdog_timeo = VMAC_TX_TIMEOUT;
 
@@ -1593,9 +1405,6 @@ int vmac_net_init(struct pci_dev *pdev)
 	INIT_WORK(&vmp->low_pwr_work, vmac_put_ep_low_pwr);
 	vmp->ep_under_low_pwr = false;
 
-#ifdef QTN_RC_ENABLE_HDP
-	tqe_lhost_add_pcie_handler(&vmac_hdp_tx, ndev);
-#endif
 	return 0;
 
  vnet_init_err_3:
@@ -1616,17 +1425,10 @@ static void free_rx_skbs(struct vmac_priv *vmp)
 	 */
 	uint16_t i;
 	for (i = 0; i < vmp->rx_bd_num; i++) {
-#ifdef QTN_RC_ENABLE_HDP
-		uintptr_t baddr = vmp->rx_bd_base[i].buff_addr;
-		if (baddr)
-			topaz_hbm_put_buf((void *)baddr,
-					  TOPAZ_HBM_BUF_EMAC_RX_POOL);
-#else
 		if (vmp->rx_buf_info[i].skb) {
 			dev_kfree_skb(vmp->rx_buf_info[i].skb);
 			vmp->rx_buf_info[i].skb = NULL;
 		}
-#endif
 	}
 }
 
@@ -1637,19 +1439,10 @@ static void free_tx_skbs(struct vmac_priv *vmp)
 	 */
 	uint16_t i;
 	for (i = 0; i < vmp->tx_bd_num; i++) {
-#ifdef QTN_RC_ENABLE_HDP
-		uint32_t baddr = vmp->tx_bd_base[i].buff_addr;
-		if (baddr) {
-			topaz_hbm_put_buf((void *)baddr,
-					  TOPAZ_HBM_BUF_EMAC_RX_POOL);
-			vmp->tx_buf_info[i].pa = 0;
-		}
-#else
 		if (vmp->tx_buf_info[i].skb) {
 			dev_kfree_skb(vmp->tx_buf_info[i].skb);
 			vmp->tx_buf_info[i].skb = 0;
 		}
-#endif
 	}
 }
 
