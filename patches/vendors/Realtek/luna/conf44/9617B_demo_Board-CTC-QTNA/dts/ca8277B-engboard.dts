@@ -1,0 +1,399 @@
+/*
+ * dts file for Cortina Access Venus FPGA Board
+ *
+ * Copyright (C) 2018, Cortina Access
+ *
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include "ca8277B-soc_asic.dtsi"
+#include "ca8277B-spinand.dtsi"
+#include "ca8277B-eng-voip.dts"
+#include "ca8277B-soc-clks.dtsi"
+#include "rtk-gpio.dtsi"
+
+/ {
+	model = "Cortina Access Venus ENG Board";
+	compatible = "cortina,venus", "cortina,ca8277B";
+	#address-cells = <2>;
+	#size-cells = <2>;
+	interrupt-parent = <&gic>;
+
+	memory { /* 512MB */
+		device_type = "memory";
+		reg = <0x00000000 0x00000000 0x0 0x20000000>;
+	};
+
+    gpio-reset {
+            compatible = "linux,gpio-reset";
+
+            pcie0_device_rst: pcie0_device {
+                    #reset-cells = <0>;
+                    /* 255 will inactive this node */
+                    gpios = <&gpio0 4 GPIO_ACTIVE_LOW>;
+                    asserted-state = <2>;
+                    /* device reset pulse width */
+                    duration-ms = <150>;
+            };
+
+            pcie1_device_rst: pcie1_device {
+                    #reset-cells = <0>;
+                    /* 255 will inactive this node */
+                    gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
+                    asserted-state = <2>;
+                    /* device reset pulse width */
+                    duration-ms = <150>;
+            };
+
+            pcie2_device_rst: pcie2_device {
+                    #reset-cells = <0>;
+                    /* 255 will inactive this node */
+                    gpios = <&gpio0 255 GPIO_ACTIVE_LOW>;
+                    asserted-state = <0>;
+                    /* device reset pulse width */
+                    duration-ms = <150>;
+            };
+            usb_vbus_rst: usb_vbus {
+                    #reset-cells = <0>;
+                    gpios = <&gpio3 4 0>;
+                    asserted-state = <1>;
+            };
+    };
+    vbus_rst {
+            compatible = "rtk,vbus-chain";
+            resets = <&usb_vbus_rst>;
+    };
+	gpio-keys {
+		compatible = "gpio-keys";
+		autorepeat;
+
+		btn_reset {
+			label = "btn,reset";
+			linux,code = <KEY_RESTART>;
+			gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+		};
+		btn_wps {
+			label = "btn,wps";
+			linux,code = <KEY_WPS_BUTTON>;
+			gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
+		};
+		btn_wifi {
+			label = "btn,wifi";
+			linux,code = <KEY_WLAN>;
+			gpios = <&gpio3 3 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
+
+/* "okay" - turn on, "disabled" - turn off */
+&glb_phy {
+	/* forced-on; */
+};
+
+&usb_hsphy {
+	status = "okay";
+};
+
+&usb_ssphy {
+	status = "okay";
+};
+
+&i2c {
+       clock-frequency = <100000>;
+       timeout = <1000>;
+       retries = <3>;
+
+       i2c-switch@70 {
+               compatible = "nxp,pca9544";
+               #address-cells = <1>;
+               #size-cells = <0>;
+               reg = <0x70>;
+               status = "disabled";
+       };
+
+       pgpio: pgpio@73 {
+               compatible = "nxp,pca9538";
+               #gpio-cells = <2>;
+               reg = <0x73>;
+               gpio-controller;
+               status = "disabled";
+       };
+};
+
+&pcie0 {
+	status = "okay";
+
+	resets = <&block_rst PCI0_RESET>, <&dphy_rst PHY_S0_PCIE_RESET>,
+		 <&pcie0_device_rst>;
+	reset-names = "core_reset", "phy_reset", "device_reset";
+
+	ready-time = /bits/ 16 <150>; /* device with embedded OS system */
+
+	dma-coherent;
+	linux,pci-domain = <0>;
+	bus-range = <0x0 0x0>; /* save scan time */
+	num-lanes = <2>;
+	serdes-cfg0 = /* S0_0 gen1 */
+		      <0xf4333068 0x00000000>,
+
+		      <0xf4333004 0x00001852>,
+		      <0xf4333008 0x00006042>,
+		      <0xf4333010 0x00008000>,
+		      <0xf4333014 0x0000062c>,
+		      <0xf4333018 0x00000007>,
+		      <0xf4333028 0x0000d210>, /* #LEQ adapt, CMU Rs */
+		      <0xf433302c 0x0000b905>, /* #OOBS */
+		      <0xf4333030 0x0000c008>, /* #RX detect */
+		      <0xf4333034 0x0000f712>,
+		      <0xf4333038 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4333080 0x0000d466>,
+		      <0xf4333084 0x000066aa>,
+		      <0xf4333088 0x00000013>,
+		      <0xf433308c 0x0000bb66>,
+		      <0xf4333090 0x00004f0c>,
+		      <0xf43330ac 0x0000b003>,
+		      <0xf43330b8 0x0000fffe>, /* enable this line when using Multi-Lane */
+		      <0xf4333024 0x0000500c>,
+		      <0xf4333024 0x0000520c>,
+
+		      /* S0_0 gen2 */
+		      <0xf4333168 0x00000000>,
+
+		      <0xf4333104 0x0000204a>,
+		      <0xf4333108 0x00006042>,
+		      <0xf4333110 0x00008000>,
+		      <0xf4333114 0x0000062c>,
+		      <0xf4333118 0x00000007>,
+		      <0xf4333128 0x0000d210>, /* #LEQ adaption, CMU Rs */
+		      <0xf433312c 0x0000b905>, /* #OOBS */
+		      <0xf4333130 0x0000c008>, /* #RX detect */
+		      <0xf4333134 0x0000f712>,
+		      <0xf4333138 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4333178 0x0000e1e0>,
+		      <0xf4333184 0x000066aa>,
+		      <0xf4333188 0x00000013>,
+		      <0xf433318c 0x0000bb66>,
+		      <0xf4333190 0x00004f10>,
+		      <0xf43331ac 0x0000b003>,
+		      <0xf43331b8 0x0000fffe>, /* enable this line when using Multi-Lane */
+		      <0xf43331bc 0x00005100>,
+		      <0xf4333124 0x0000500c>,
+		      <0xf4333124 0x0000520c>;
+
+	serdes-cfg1 = /* S0_1 gen1 */
+		      <0xf4334068 0x00000000>,
+
+		      <0xf4334004 0x00001852>,
+		      <0xf4334008 0x00006042>,
+		      <0xf4334010 0x00008000>,
+		      <0xf4334014 0x0000062c>,
+		      <0xf4334018 0x00000007>,
+		      <0xf4334028 0x0000d210>, /* #LEQ adapt, CMU Rs */
+		      <0xf433402c 0x0000b905>, /* #OOBS */
+		      <0xf4334030 0x0000c008>, /* #RX detect */
+		      <0xf4334034 0x0000f712>,
+		      <0xf4334038 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4334080 0x0000d466>,
+		      <0xf4334084 0x000066aa>,
+		      <0xf4334088 0x00000013>,
+		      <0xf433408c 0x0000bb66>,
+		      <0xf4334090 0x00004f0c>,
+		      <0xf43340ac 0x0000b003>,
+		      <0xf43340b8 0x0000fffe>, /* enable this line when using Multi-Lane */
+		      <0xf4334024 0x0000500c>,
+		      <0xf4334024 0x0000520c>,
+
+		      /* S0_1 gen2 */
+		      <0xf4334168 0x00000000>,
+
+		      <0xf4334104 0x0000204a>,
+		      <0xf4334108 0x00006042>,
+		      <0xf4334110 0x00008000>,
+		      <0xf4334114 0x0000062c>,
+		      <0xf4334118 0x00000007>,
+		      <0xf4334128 0x0000d210>, /* #LEQ adaption, CMU Rs */
+		      <0xf433412c 0x0000b905>, /* #OOBS */
+		      <0xf4334130 0x0000c008>, /* #RX detect */
+		      <0xf4334134 0x0000f712>,
+		      <0xf4334138 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4334178 0x0000e1e0>,
+		      <0xf4334184 0x000066aa>,
+		      <0xf4334188 0x00000013>,
+		      <0xf433418c 0x0000bb66>,
+		      <0xf4334190 0x00004f10>,
+		      <0xf43341ac 0x0000b003>,
+		      <0xf43341b8 0x0000fffe>, /* enable this line when using Multi-Lane */
+		      <0xf43341bc 0x00005100>,
+		      <0xf4334124 0x0000500c>,
+		      <0xf4334124 0x0000520c>;
+};
+
+&pcie1 {
+	status = "okay";
+
+	resets = <&block_rst PCI1_RESET>, <&dphy_rst PHY_S1_PCIE_RESET>,
+		 <&pcie1_device_rst>;
+	reset-names = "core_reset", "phy_reset", "device_reset";
+
+	ready-time = /bits/ 16 <50>;
+
+	forced-gen1;
+	dma-coherent;
+	linux,pci-domain = <1>;
+	bus-range = <0x0 0x0>; /* save scan time */
+
+	serdes-cfg0 = /* S1_0 gen1 */
+		      <0xf4335068 0x00000000>,
+
+		      <0xf4335004 0x00001852>,
+		      <0xf4335008 0x00006042>,
+		      <0xf4335010 0x00008000>,
+		      <0xf4335014 0x0000062c>,
+		      <0xf4335018 0x00000007>,
+		      <0xf4335028 0x0000d210>, /* #LEQ adapt, CMU Rs */
+		      <0xf433502c 0x0000b905>, /* #OOBS */
+		      <0xf4335030 0x0000c008>, /* #RX detect */
+		      <0xf4335034 0x0000f712>,
+		      <0xf4335038 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4335080 0x0000d466>,
+		      <0xf4335084 0x000066aa>,
+		      <0xf4335088 0x00000013>,
+		      <0xf433508c 0x0000bb66>,
+		      <0xf4335090 0x00004f0c>,
+		      <0xf43350ac 0x0000b003>,
+		      <0xf4335024 0x0000500c>,
+		      <0xf4335024 0x0000520c>,
+
+		      /* S1_0 gen2 */
+		      <0xf4335168 0x00000000>,
+
+		      <0xf4335104 0x0000204a>,
+		      <0xf4335108 0x00006042>,
+		      <0xf4335110 0x00008000>,
+		      <0xf4335114 0x0000062c>,
+		      <0xf4335118 0x00000007>,
+		      <0xf4335128 0x0000d210>, /* #LEQ adaption, CMU Rs */
+		      <0xf433512c 0x0000b905>, /* #OOBS */
+		      <0xf4335130 0x0000c008>, /* #RX detect */
+		      <0xf4335134 0x0000f712>,
+		      <0xf4335138 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4335178 0x0000e1e0>,
+		      <0xf4335184 0x000066aa>,
+		      <0xf4335188 0x00000013>,
+		      <0xf433518c 0x0000bb66>,
+		      <0xf4335190 0x00004f10>,
+		      <0xf43351ac 0x0000b003>,
+		      <0xf43351bc 0x00005100>,
+		      <0xf4335124 0x0000500c>,
+		      <0xf4335124 0x0000520c>;
+
+	serdes-cfg1 = /* S1_1 gen1 */
+		      <0xf4336068 0x00000000>,
+
+		      <0xf4336004 0x00001852>,
+		      <0xf4336008 0x00006042>,
+		      <0xf4336010 0x00008000>,
+		      <0xf4336014 0x0000062c>,
+		      <0xf4336018 0x00000007>,
+		      <0xf4336028 0x0000d210>, /* #LEQ adapt, CMU Rs */
+		      <0xf433602c 0x0000b905>, /* #OOBS */
+		      <0xf4336030 0x0000c008>, /* #RX detect */
+		      <0xf4336034 0x0000f712>,
+		      <0xf4336038 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4336080 0x0000d466>,
+		      <0xf4336084 0x000066aa>,
+		      <0xf4336088 0x00000013>,
+		      <0xf433608c 0x0000bb66>,
+		      <0xf4336090 0x00004f0c>,
+		      <0xf43360ac 0x0000b003>,
+		      <0xf4336024 0x0000500c>,
+		      <0xf4336024 0x0000520c>,
+
+		      /* S1_1 gen2 */
+		      <0xf4336168 0x00000000>,
+
+		      <0xf4336104 0x0000204a>,
+		      <0xf4336108 0x00006042>,
+		      <0xf4336110 0x00008000>,
+		      <0xf4336114 0x0000062c>,
+		      <0xf4336118 0x00000007>,
+		      <0xf4336128 0x0000d210>, /* #LEQ adaption, CMU Rs */
+		      <0xf433612c 0x0000b905>, /* #OOBS */
+		      <0xf4336130 0x0000c008>, /* #RX detect */
+		      <0xf4336134 0x0000f712>,
+		      <0xf4336138 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4336178 0x0000e1e0>,
+		      <0xf4336184 0x000066aa>,
+		      <0xf4336188 0x00000013>,
+		      <0xf433618c 0x0000bb66>,
+		      <0xf4336190 0x00004f10>,
+		      <0xf43361ac 0x0000b003>,
+		      <0xf43361bc 0x00005100>,
+		      <0xf4336124 0x0000500c>,
+		      <0xf4336124 0x0000520c>;
+};
+
+&pcie2 {
+	status = "disabled";
+
+	resets = <&block_rst PCI2_RESET>, <&dphy_rst PHY_S2_PCIE_RESET>,
+		 <&pcie2_device_rst>;
+	reset-names = "core_reset", "phy_reset", "device_reset";
+
+	ready-time = /bits/ 16 <50>;
+
+	/* forced-gen1; */
+	/* dma-coherent; */
+	linux,pci-domain = <2>;
+	bus-range = <0x0 0x0>; /* save scan time */
+
+	serdes-cfg0 = /* S2_0 gen1 */
+		      <0xf4337004 0x00001852>,
+		      <0xf4337008 0x00006042>,
+		      <0xf4337010 0x00009000>,
+		      <0xf4337014 0x0000c314>,
+		      <0xf4337018 0x00000007>,
+		      <0xf4337028 0x0000d208>, /* #LEQ adaption */
+		      <0xf433702c 0x0000b905>, /* #OOBS */
+		      <0xf4337030 0x0000c008>, /* #RX detect */
+		      <0xf4337034 0x0000f712>,
+		      <0xf4337038 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4337080 0x0000c466>,
+		      <0xf4337084 0x000066aa>,
+		      <0xf4337088 0x00000013>,
+		      <0xf433708c 0x0000bb66>,
+		      <0xf4337090 0x00004f0c>,
+		      <0xf43370ac 0x0000b001>,
+		      <0xf4337024 0x0000500c>,
+		      <0xf4337024 0x0000520c>,
+
+		      /* S2_0 gen2 */
+		      <0xf4337104 0x0000204a>,
+		      <0xf4337108 0x00006042>,
+		      <0xf4337110 0x00009000>,
+		      <0xf4337114 0x0000c314>,
+		      <0xf4337118 0x00000007>,
+		      <0xf4337128 0x0000d208>, /* #LEQ adaption */
+		      <0xf433712c 0x0000b905>, /* #OOBS */
+		      <0xf4337130 0x0000c008>, /* #RX detect */
+		      <0xf4337134 0x0000f712>,
+		      <0xf4337138 0x00001000>, /* #TX_SEL_VCM */
+		      <0xf4337178 0x00002ceb>,
+		      <0xf4337184 0x000066aa>,
+		      <0xf4337188 0x00000013>,
+		      <0xf433718c 0x0000bb66>,
+		      <0xf4337190 0x00004f10>,
+		      <0xf43371ac 0x0000b001>,
+		      <0xf43371bc 0x0000a046>,
+		      <0xf4337124 0x0000500c>,
+		      <0xf4337124 0x0000520c>;
+};
+&cpu_daemon_clk {
+/* Kernel will use this value to setup cpu clock on booting */
+/* If no init-speed, use strap_pin/HW to set */
+	init-speed = <1000000000>;
+};
+

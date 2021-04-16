@@ -1,0 +1,11 @@
+## VENUS don't need Flash and DDR Chip info
+########For UBI Device IMAGE #############
+## ubinize — a tool for generating UBI images
+## UBINIZE_ARGS is determined by Flash Chip
+# 
+# -m, --min-io-size=bytes.  Minimum input/output unit size of the flash in bytes
+# -p --min-io-size=bytes.  Minimum input/output unit size of the flash in bytes
+# -s, --sub-page-size=bytes.  Minimum input/output unit used for UBI headers,
+#  e.g. sub-page size in case of NAND flash (equivalent to the minimum input/output unit size by default).
+UBINIZE_ARGS = -m 2048 -p 128KiB -s 2048
+
