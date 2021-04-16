@@ -1,0 +1,85 @@
+HW(RTL9617B)
+	power 	12V/1.5A
+
+
+Realtek SDK 
+	unified-sdk-v1.0.17.tar.bz2
+
+
+Toolchain
+	/share/rlx/asdk-5.4.1-a53-EL-4.4-g2.23-a64nut-170801-r1
+
+
+Source
+	# extract Realtek SDK
+	tar -jxf unified-sdk-v1.0.17.tar.bz2
+	# extract the source from QP pacakge to Realtek SDK
+	tar -zxf qtna_wifi_ax2_rtl9617b.tar.gz -C sdk
+
+
+Build
+	# config
+	cd sdk
+	make preconfig44_9617B_demo_Board-CTC-QTNA
+	make menuconfig  	-> Exit -> Yes (3 times)
+	# build
+	make all
+	
+
+images
+	sdk/images/G3_ubi_device.ubi
+	sdk/images/img.tar
+
+
+RTL9617B u-boot ENV
+	rootfs_img_name=rootfs
+	upk=setenv current_vol ubi_k0 && run check_vol && tftpboot ${ftfp_base} Image.lzma && ubi write ${ftfp_base} ubi_k0 ${filesize}
+	upr=setenv current_vol ubi_r0 && run check_vol && tftpboot ${ftfp_base} ${rootfs_img_name} && ubi write ${ftfp_base} ubi_r0 ${fil}
+	upt=tftp ${ftfp_base} img.tar && upimgtar ${fileaddr} ${filesize}
+
+
+Upgrade images in u-boot
+	setenv ipaddr 192.168.1.1
+	setenv serverip 192.168.1.169
+	run updev			    // sdk/images/G3_ubi_device.ubi
+	run upt				    // images/img.tar
+
+
+Bring Up QSR10G
+	# Just for your reference, this step will be done by /etc/init.d/rc33 script
+	1) prepare QCS firmware in RLT9617B 
+	   QCS-AX-D12	 /lib/firmware/pearl-linux.lzma.img --> /lib/firmware/pearl-linux-c-${QCS_VERSION}p562.lzma.img
+	   QCS-AX2-D12A	 /lib/firmware/jade-linux.lzma.img  --> /tmp/jade-linux-${QCS_VERSION}p600.lzma.img
+  
+	2) load PCIe host driver
+	   insmod /lib/modules/qsr10g-pcie.ko
+
+	3) bridge "host0" interface with LAN ports
+	   brctl addif br0 host0
+	   ifconfig host0 up
+
+	4) example of how to config QSR10GU-AX via QCSAPI
+	   qcsapi_sockrpc --host [EP_IP] [cmd] [interface]
+	   qcsapi_sockrpc --host [EP_IP] get_SSID [interface]
+	
+
+About Fleet Contrak and Performance Tuning
+	# Just for your reference, this step will be done by /etc/init.d/rc33 script
+	// cpu3 works for Wi-Fi tx ; cpu2 works for WiFi rx
+	echo wlan 0 mode 1 cpu 3 > /proc/fc/ctrl/smp_dispatch_wifi_tx
+	echo wlan 0 mode 1 cpu 2 > /proc/fc/ctrl/smp_dispatch_wifi_rx
+	// smp_affinity
+	echo 2 > /proc/irq/13/smp_affinity
+	echo 1 > /proc/irq/18/smp_affinity
+	
+	# Note:	Fragment is not supported by FC
+	# so please be make sure the fragment is disabled for Ethernet packets. 
+
+Statistics for debug
+	// enable statistics of FC
+	echo 1 > /proc/fc/sw_dump/fwd_statistic
+	echo 1 > /proc/fc/sw_dump/smp_statistic
+	// show FC statistics
+	cat /proc/fc/hw_dump/dropcount
+	cat /proc/fc/sw_dump/fwd_statistic
+	cat /proc/fc/sw_dump/smp_statistic
