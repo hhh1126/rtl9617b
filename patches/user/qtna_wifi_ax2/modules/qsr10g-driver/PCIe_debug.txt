@@ -1,0 +1,48 @@
+
+Measure the PCIe Bus bandwidth in Linux kernel
+	1. test upstream bandwidth
+		run the command in EP side, you will get the test result in the EP console
+			fn pearl_us_bw_test burst_packet_num packet_len packet_align_offset packet_partten
+
+	2. test downstream bandwidth
+		a) run the command in RC
+			vmac ds burst_packet_num packet_len packet_align_offset packet_partten
+		b) Run the command in EP, you will see the test result
+			fn pearl_ds_bw_test
+		c) Run the command in RC side to end the test
+			vmac ds 0
+
+RC Host debug command
+	1. Command list
+	-----------------------------------------------------
+		command		description
+		vmac s 0	disable all of runtime dump
+		vmac s 1	schedule napi manually
+		vmac s 2	clear the interrupt counter
+		vmac s 3	set the interval of trigger interrupt
+
+		vmac s 16	show Tx BD, need vmac g to print it out
+		vmac s 17	show Rx BD, need vmac g to print it out
+		vmac s 18	show interrupt count, need vmac g to print it out
+
+		vmac s 32	dump Tx BD, runtime
+		vmac s 33	dump Tx skb, runtime
+		vmac s 48	dump Rx BD, runtime
+		vmac s 49	dump Rx skb, runtime
+		vmac s 50	dump Rx interrupt, runtime
+
+		vmac r addr len		read the memory
+		vmac w addr value	Write the memory
+		vmac sysr addr len	Read the sys control reg
+		vmac sysw addr value	Write the control reg
+		vmac hdpr addr len	Read the HDP reg
+		vmac hdpw addr value	Write the HDP reg
+		vmac mmr addr len	Read mappped mempory
+		vmac mmw addr value	Write mappped mempory
+
+	2. command example
+		a) dump the tx bd, tx packet, rx bd and rx packet
+			vmac s 32 33 48 49
+		b) dump the tx bd, once
+			vmac g 16
+
